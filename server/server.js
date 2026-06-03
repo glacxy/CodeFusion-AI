@@ -3,7 +3,8 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 
 const connectDB = require("./config/db");
-
+const authRoutes = require("./routes/authRoutes");
+app.use("/api/auth", authRoutes);
 dotenv.config();
 
 // Initialize server
