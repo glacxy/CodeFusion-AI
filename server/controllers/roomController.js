@@ -1,10 +1,19 @@
-// Room Controller
-// Add your room controller functions here
+const Room = require("../models/Room");
 
 exports.createRoom = async (req, res) => {
   try {
-    // Add create room logic here
-    res.json({ message: 'Create room endpoint' });
+    const { name, description, host } = req.body;
+
+    const room = await Room.create({
+      name,
+      description,
+      host,
+    });
+
+    res.status(201).json({
+      message: "Room created successfully",
+      room,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -12,8 +21,12 @@ exports.createRoom = async (req, res) => {
 
 exports.getRooms = async (req, res) => {
   try {
-    // Add get rooms logic here
-    res.json({ message: 'Get rooms endpoint' });
+    const rooms = await Room.find().populate("host", "username email");
+
+    res.status(200).json({
+      message: "Rooms retrieved successfully",
+      rooms,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

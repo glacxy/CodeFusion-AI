@@ -4,30 +4,40 @@ const dotenv = require("dotenv");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
-app.use("/api/auth", authRoutes);
+const roomRoutes = require("./routes/roomRoutes");
+
 dotenv.config();
 
-// Initialize server
-const init = async () => {
-  await connectDB();
-};
-
 const app = express();
-
+console.log("authRoutes type =", typeof authRoutes);
+console.log("roomRoutes type =", typeof roomRoutes);
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/rooms", roomRoutes);
+
+// Test Route
 app.get("/", (req, res) => {
   res.send("CodeFusion AI Backend Running");
 });
 
+// Start Server
 const PORT = process.env.PORT || 5000;
 
-init().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server Running on Port ${PORT}`);
-  });
-}).catch((err) => {
-  console.error("Failed to initialize server:", err);
-  process.exit(1);
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server Running on Port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to connect database:", error);
+    process.exit(1);
+  }
+};
+
+startServer();
