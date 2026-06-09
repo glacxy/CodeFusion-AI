@@ -1,0 +1,8 @@
+name: CodeFusion AI - Local
+values:
+  - key: baseUrl
+    value: 'http://localhost:5000'
+  - key: roomId
+    value: ''
+  - key: hostUserId
+    value: ''

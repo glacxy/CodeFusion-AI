@@ -1,0 +1,28 @@
+$kind: http-request
+name: Register User - Duplicate Email
+method: POST
+url: '{{baseUrl}}/api/auth/register'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "username": "testuser2",
+      "email": "testuser@example.com",
+      "password": "Test@1234"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 400", function () {
+        pm.response.to.have.status(400);
+      });
+
+      pm.test("Response has message field equal to 'User already exists'", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData.message).to.eql("User already exists");
+      });

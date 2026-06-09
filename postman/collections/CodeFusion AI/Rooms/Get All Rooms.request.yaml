@@ -1,0 +1,31 @@
+$kind: http-request
+name: Get All Rooms
+method: GET
+url: '{{baseUrl}}/api/rooms'
+order: 3000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has message field equal to 'Rooms retrieved successfully'", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData.message).to.eql("Rooms retrieved successfully");
+      });
+
+      pm.test("Response has rooms array", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData).to.have.property("rooms");
+      });
+
+      pm.test("rooms is an array", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData.rooms).to.be.an("array");
+      });
+
+      pm.test("Response time is less than 2000ms", function () {
+        pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

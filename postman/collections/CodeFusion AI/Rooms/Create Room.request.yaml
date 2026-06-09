@@ -1,0 +1,52 @@
+$kind: http-request
+name: Create Room
+method: POST
+url: '{{baseUrl}}/api/rooms/create'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Test Room",
+      "description": "A room for testing",
+      "host": "{{hostUserId}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 201", function () {
+        pm.response.to.have.status(201);
+      });
+
+      pm.test("Response has message field equal to 'Room created successfully'", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData.message).to.eql("Room created successfully");
+      });
+
+      pm.test("Response has room object", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData).to.have.property("room");
+      });
+
+      pm.test("room.name equals 'Test Room'", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData.room.name).to.eql("Test Room");
+      });
+
+      pm.test("room.isActive is true", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData.room.isActive).to.be.true;
+      });
+
+      pm.test("Response time is less than 2000ms", function () {
+        pm.expect(pm.response.responseTime).to.be.below(2000);
+      });
+
+      var jsonData = pm.response.json();
+      if (jsonData.room && jsonData.room._id) {
+        pm.collectionVariables.set("roomId", jsonData.room._id);
+      }

@@ -1,0 +1,27 @@
+$kind: http-request
+name: Create Room - Missing Name
+method: POST
+url: '{{baseUrl}}/api/rooms/create'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "description": "Room without a name",
+      "host": "{{hostUserId}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is NOT 201 (400 or 500 expected since name is required)", function () {
+        pm.expect(pm.response.code).to.not.eql(201);
+      });
+
+      pm.test("Response has a message field", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData).to.have.property("message");
+      });
