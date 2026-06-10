@@ -2,22 +2,21 @@ const mongoose = require("mongoose");
 
 const roomSchema = new mongoose.Schema(
   {
-    name: {
+    roomName: {
       type: String,
       required: true,
-    },
-    description: {
-      type: String,
     },
     host: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
+    participants: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );

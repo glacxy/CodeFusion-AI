@@ -1,18 +1,13 @@
 const express = require("express");
 const router = express.Router();
 
-try {
-  const roomController = require("../controllers/roomController");
-  console.log("Room Controller loaded:", typeof roomController, Object.keys(roomController));
-  
-  if (typeof roomController.createRoom === "function") {
-    router.post("/create", roomController.createRoom);
-  }
-  if (typeof roomController.getRooms === "function") {
-    router.get("/", roomController.getRooms);
-  }
-} catch (err) {
-  console.error("Error loading room controller:", err.message);
-}
+const {
+  createRoom,
+  getRooms,
+} = require("../controllers/roomController");
+const { protect } = require("../middleware/authMiddleware");
+
+router.post("/create", protect, createRoom);
+router.get("/", protect, getRooms);
 
 module.exports = router;
