@@ -20,6 +20,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 
 // Test Route
+app.get("/db-test", (req, res) => {
+  res.send("DB Test Route Working");
+});
 app.get("/", (req, res) => {
   res.send("CodeFusion AI Backend Running");
 });

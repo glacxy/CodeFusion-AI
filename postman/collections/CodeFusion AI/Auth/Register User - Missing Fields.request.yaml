@@ -1,0 +1,26 @@
+$kind: http-request
+name: Register User - Missing Fields
+method: POST
+url: '{{baseUrl}}/api/auth/register'
+order: 3000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "incomplete@example.com"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is NOT 201 (400 or 500 expected)", function () {
+        pm.expect(pm.response.code).to.not.eql(201);
+      });
+
+      pm.test("Response has a message field", function () {
+        var jsonData = pm.response.json();
+        pm.expect(jsonData).to.have.property("message");
+      });

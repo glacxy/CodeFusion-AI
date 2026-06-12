@@ -1,33 +1,38 @@
 const Room = require("../models/Room");
 
-exports.createRoom = async (req, res) => {
+const createRoom = async (req, res) => {
   try {
-    const { name, description, host } = req.body;
+    const { roomName } = req.body;
+
+    if (!roomName) {
+      return res.status(400).json({
+        message: "Room name is required",
+      });
+    }
 
     const room = await Room.create({
-      name,
-      description,
-      host,
+      roomName,
+      host: req.user.id,
+      participants: [req.user.id],
     });
 
-    res.status(201).json({
-      message: "Room created successfully",
-      room,
-    });
+    res.status(201).json(room);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-exports.getRooms = async (req, res) => {
+const getRooms = async (req, res) => {
   try {
     const rooms = await Room.find().populate("host", "username email");
 
-    res.status(200).json({
-      message: "Rooms retrieved successfully",
-      rooms,
-    });
+    res.json(rooms);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+};
+
+module.exports = {
+  createRoom,
+  getRooms,
 };
