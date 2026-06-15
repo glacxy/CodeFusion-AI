@@ -1,8 +1,28 @@
 import { useState } from "react";
+import { loginUser } from "../api/authApi";
+import { useNavigate } from "react-router-dom";
 
 function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  const handleLogin = async () => {
+    setError("");
+
+    try {
+      const response = await loginUser({
+        identifier,
+        password,
+      });
+
+      localStorage.setItem("token", response.data.token);
+      navigate("/dashboard");
+    } catch (error) {
+      setError(error.response?.data?.message || "Login failed. Please try again.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black flex justify-center items-center">
@@ -32,13 +52,22 @@ function Login() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
+        {error && (
+          <div className="mb-4 rounded bg-red-500/20 border border-red-500 p-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
         <div className="text-right mb-4">
           <button className="text-pink-400 hover:text-pink-300">
             Forgot Password?
           </button>
         </div>
 
-        <button className="w-full bg-purple-600 py-3 rounded-xl hover:bg-purple-700">
+        <button
+          onClick={handleLogin}
+          className="w-full bg-purple-600 py-3 rounded-xl hover:bg-purple-700"
+        >
           Login
         </button>
 
