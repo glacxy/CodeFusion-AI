@@ -16,7 +16,7 @@ const server = http.createServer(app);
 // Socket.IO Setup
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "http://localhost:5174",
     methods: ["GET", "POST"],
   },
 });
@@ -28,17 +28,23 @@ io.on("connection", (socket) => {
   // Join Room
   socket.on("joinRoom", (roomId) => {
     socket.join(roomId);
-
     console.log(`🟣 ${socket.id} joined room ${roomId}`);
   });
 
-  // Send Message
+  // Chat Message
   socket.on("sendMessage", (data) => {
     io.to(data.roomId).emit("receiveMessage", data);
 
     console.log(
       `💬 Message in room ${data.roomId}: ${data.message}`
     );
+  });
+
+  // Code Sync
+  socket.on("codeChange", (data) => {
+    console.log("CODE RECEIVED:", data.code);
+
+    socket.to(data.roomId).emit("receiveCode", data.code);
   });
 
   // Disconnect

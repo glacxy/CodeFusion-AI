@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
+import Editor from "@monaco-editor/react";
 
 const socket = io("http://localhost:5000");
 
@@ -9,6 +10,7 @@ function Room() {
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
+  const [code, setCode] = useState("// Start Coding...");
 
   useEffect(() => {
     socket.emit("joinRoom", roomId);
@@ -17,8 +19,14 @@ function Room() {
       setMessages((prev) => [...prev, data]);
     });
 
+   socket.on("receiveCode", (newCode) => {
+  console.log("RECEIVED:", newCode);
+
+  setCode(newCode);
+});
     return () => {
       socket.off("receiveMessage");
+      socket.off("receiveCode");
     };
   }, [roomId]);
 
@@ -39,7 +47,8 @@ function Room() {
         Room: {roomId}
       </h1>
 
-      <div className="bg-gray-900 p-4 rounded h-96 overflow-y-auto">
+      {/* Messages */}
+      <div className="bg-gray-900 p-4 rounded h-60 overflow-y-auto">
         {messages.map((msg, index) => (
           <div
             key={index}
@@ -50,6 +59,7 @@ function Room() {
         ))}
       </div>
 
+      {/* Chat Input */}
       <div className="flex gap-3 mt-4">
         <input
           type="text"
@@ -65,6 +75,27 @@ function Room() {
         >
           Send
         </button>
+      </div>
+
+      {/* Code Editor */}
+      <div className="mt-8">
+        <Editor
+          height="500px"
+          defaultLanguage="javascript"
+          theme="vs-dark"
+          value={code}
+
+onChange={(value = "") => {
+  console.log("SENDING:", value);
+
+  setCode(value);
+
+  socket.emit("codeChange", {
+    roomId,
+    code: value,
+  });
+}}
+        />
       </div>
     </div>
   );
