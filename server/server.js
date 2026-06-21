@@ -56,7 +56,103 @@ const io = new Server(server, {
   },
 });
 
-const roomCode = new Map();
+const createInitialFiles = () => ({
+  "App.jsx": `import Room from "./Room";
+
+function App() {
+  return <Room />;
+}
+
+export default App;
+`,
+  "main.jsx": `import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+`,
+  "Room.jsx": `function Room() {
+  return (
+    <main>
+      <h1>Welcome to CodeFusion AI</h1>
+    </main>
+  );
+}
+
+export default Room;
+`,
+});
+
+const roomFiles = new Map();
+const roomCurrentFiles = new Map();
+
+const cloneFiles = (files) => ({ ...files });
+const hasFile = (files, fileName) => Object.prototype.hasOwnProperty.call(files, fileName);
+
+const isValidFilesObject = (files) => {
+  if (!files || typeof files !== "object" || Array.isArray(files)) return false;
+
+  return Object.entries(files).every(
+    ([fileName, code]) =>
+      typeof fileName === "string" &&
+      fileName.trim().length > 0 &&
+      typeof code === "string"
+  );
+};
+
+const getRoomState = (roomId) => {
+  if (!roomFiles.has(roomId)) {
+    const files = createInitialFiles();
+    roomFiles.set(roomId, files);
+    roomCurrentFiles.set(roomId, "App.jsx");
+  }
+
+  const files = roomFiles.get(roomId);
+  const currentFile = roomCurrentFiles.get(roomId);
+
+  if (!hasFile(files, currentFile)) {
+    roomCurrentFiles.set(roomId, Object.keys(files)[0] || "App.jsx");
+  }
+
+  return {
+    roomId,
+    files: cloneFiles(roomFiles.get(roomId)),
+    currentFile: roomCurrentFiles.get(roomId),
+  };
+};
+
+const saveRoomState = (roomId, files, currentFile) => {
+  const safeFiles = isValidFilesObject(files) ? cloneFiles(files) : createInitialFiles();
+  const fileNames = Object.keys(safeFiles);
+  const safeCurrentFile =
+    typeof currentFile === "string" && hasFile(safeFiles, currentFile)
+      ? currentFile
+      : fileNames[0] || "App.jsx";
+
+  roomFiles.set(roomId, safeFiles);
+  roomCurrentFiles.set(roomId, safeCurrentFile);
+
+  return getRoomState(roomId);
+};
+
+const emitRoomState = (socket, roomId, reason, includeSender = false) => {
+  const state = {
+    ...getRoomState(roomId),
+    socketId: socket.id,
+    reason,
+  };
+
+  if (includeSender) {
+    io.to(roomId).emit("receiveCode", state);
+    return;
+  }
+
+  socket.to(roomId).emit("receiveCode", state);
+};
 
 io.on("connection", (socket) => {
   console.log("[socket] connected:", {
@@ -79,74 +175,138 @@ io.on("connection", (socket) => {
     }
 
     socket.join(roomId);
+    const state = getRoomState(roomId);
 
-    const existingCode = roomCode.get(roomId);
+    socket.emit("roomJoined", { roomId, socketId: socket.id });
+    socket.emit("receiveCode", {
+      ...state,
+      socketId: "server",
+      reason: "room-state-sync",
+    });
 
     console.log("[joinRoom] socket joined room:", {
       socketId: socket.id,
       roomId,
-      rooms: Array.from(socket.rooms),
-      hasExistingCode: typeof existingCode === "string",
+      fileCount: Object.keys(state.files).length,
+      currentFile: state.currentFile,
+      roomSize: io.sockets.adapter.rooms.get(roomId)?.size || 0,
     });
-
-    socket.emit("roomJoined", { roomId, socketId: socket.id });
-
-    if (typeof existingCode === "string") {
-      socket.emit("receiveCode", {
-        roomId,
-        code: existingCode,
-        socketId: "server",
-        reason: "room-state-sync",
-      });
-
-      console.log("[joinRoom] sent existing code to joining socket:", {
-        socketId: socket.id,
-        roomId,
-        codeLength: existingCode.length,
-      });
-    }
   });
 
   socket.on("sendMessage", (data) => {
     const { roomId, message } = data || {};
 
-    if (!roomId || typeof message !== "string") {
+    if (!roomId || typeof message !== "string" || !message.trim()) {
       console.warn("[sendMessage] invalid payload:", { socketId: socket.id, data });
       return;
     }
 
-    io.to(roomId).emit("receiveMessage", { roomId, message, socketId: socket.id });
-
-    console.log("[sendMessage] broadcast:", {
-      socketId: socket.id,
+    io.to(roomId).emit("receiveMessage", {
       roomId,
-      messageLength: message.length,
+      message: message.trim(),
+      socketId: socket.id,
+      createdAt: new Date().toISOString(),
     });
   });
 
   socket.on("codeChange", (data) => {
-    const { roomId, code } = data || {};
+    const { roomId, files, currentFile } = data || {};
 
-    if (!roomId || typeof code !== "string") {
+    if (!roomId || !isValidFilesObject(files)) {
       console.warn("[codeChange] invalid payload:", { socketId: socket.id, data });
       return;
     }
 
-    roomCode.set(roomId, code);
+    saveRoomState(roomId, files, currentFile);
+    emitRoomState(socket, roomId, "peer-code-change");
+  });
 
-    socket.to(roomId).emit("receiveCode", {
-      roomId,
-      code,
-      socketId: socket.id,
-      reason: "peer-code-change",
+  socket.on("createFile", (data) => {
+    const { roomId, fileName } = data || {};
+
+    if (!roomId || typeof fileName !== "string" || !fileName.trim()) {
+      console.warn("[createFile] invalid payload:", { socketId: socket.id, data });
+      return;
+    }
+
+    const state = getRoomState(roomId);
+    const nextFileName = fileName.trim();
+
+    if (hasFile(state.files, nextFileName)) return;
+
+    saveRoomState(roomId, { ...state.files, [nextFileName]: "" }, nextFileName);
+    emitRoomState(socket, roomId, "file-created");
+  });
+
+  socket.on("renameFile", (data) => {
+    const { roomId, oldFileName, newFileName } = data || {};
+
+    if (
+      !roomId ||
+      typeof oldFileName !== "string" ||
+      typeof newFileName !== "string" ||
+      !newFileName.trim()
+    ) {
+      console.warn("[renameFile] invalid payload:", { socketId: socket.id, data });
+      return;
+    }
+
+    const state = getRoomState(roomId);
+    const trimmedNewFileName = newFileName.trim();
+
+    if (!hasFile(state.files, oldFileName) || hasFile(state.files, trimmedNewFileName)) {
+      return;
+    }
+
+    const nextFiles = {};
+    Object.entries(state.files).forEach(([fileName, code]) => {
+      nextFiles[fileName === oldFileName ? trimmedNewFileName : fileName] = code;
     });
 
-    console.log("[codeChange] received and forwarded:", {
-      socketId: socket.id,
-      roomId,
-      codeLength: code.length,
-      recipientRoomSize: io.sockets.adapter.rooms.get(roomId)?.size || 0,
-    });
+    const nextCurrentFile =
+      state.currentFile === oldFileName ? trimmedNewFileName : state.currentFile;
+
+    saveRoomState(roomId, nextFiles, nextCurrentFile);
+    emitRoomState(socket, roomId, "file-renamed");
+  });
+
+  socket.on("deleteFile", (data) => {
+    const { roomId, fileName } = data || {};
+
+    if (!roomId || typeof fileName !== "string") {
+      console.warn("[deleteFile] invalid payload:", { socketId: socket.id, data });
+      return;
+    }
+
+    const state = getRoomState(roomId);
+    const fileNames = Object.keys(state.files);
+
+    if (!hasFile(state.files, fileName) || fileNames.length <= 1) return;
+
+    const nextFiles = { ...state.files };
+    delete nextFiles[fileName];
+
+    const nextCurrentFile =
+      state.currentFile === fileName ? Object.keys(nextFiles)[0] : state.currentFile;
+
+    saveRoomState(roomId, nextFiles, nextCurrentFile);
+    emitRoomState(socket, roomId, "file-deleted");
+  });
+
+  socket.on("switchFile", (data) => {
+    const { roomId, currentFile } = data || {};
+
+    if (!roomId || typeof currentFile !== "string") {
+      console.warn("[switchFile] invalid payload:", { socketId: socket.id, data });
+      return;
+    }
+
+    const state = getRoomState(roomId);
+
+    if (!hasFile(state.files, currentFile)) return;
+
+    saveRoomState(roomId, state.files, currentFile);
+    emitRoomState(socket, roomId, "file-switched");
   });
 
   socket.on("disconnect", (reason) => {

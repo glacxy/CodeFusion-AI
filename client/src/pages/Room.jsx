@@ -1,18 +1,64 @@
-import { useParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import { io } from "socket.io-client";
+import { useParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
+import { io } from "socket.io-client";
+
+import ChatBox from "../components/ChatBox";
+import Explorer from "../components/Explorer";
+import Tabs from "../components/Tabs";
 
 const SOCKET_URL = "http://localhost:5000";
+
+const initialFiles = {
+  "App.jsx": `import Room from "./Room";
+
+function App() {
+  return <Room />;
+}
+
+export default App;
+`,
+  "main.jsx": `import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+`,
+  "Room.jsx": `function Room() {
+  return (
+    <main>
+      <h1>Welcome to CodeFusion AI</h1>
+    </main>
+  );
+}
+
+export default Room;
+`,
+};
+
+const getLanguageFromFileName = (fileName) => {
+  if (fileName.endsWith(".json")) return "json";
+  if (fileName.endsWith(".css")) return "css";
+  if (fileName.endsWith(".html")) return "html";
+  if (fileName.endsWith(".ts") || fileName.endsWith(".tsx")) return "typescript";
+  return "javascript";
+};
+
+const normalizeFileName = (fileName) => fileName.trim().replace(/^\/+/, "");
 
 function Room() {
   const { roomId } = useParams();
   const socketRef = useRef(null);
-  const lastRemoteCodeRef = useRef(null);
+  const lastRemoteEditorValueRef = useRef(null);
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [code, setCode] = useState("// Start Coding...");
+  const [files, setFiles] = useState(initialFiles);
+  const [currentFile, setCurrentFile] = useState("App.jsx");
   const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   useEffect(() => {
@@ -26,36 +72,21 @@ function Room() {
     socketRef.current = socket;
 
     const joinCurrentRoom = () => {
-      if (!roomId) {
-        console.warn("[socket] cannot join room because roomId is missing");
-        return;
-      }
-
-      console.log("[socket] emitting joinRoom:", { roomId, socketId: socket.id });
+      if (!roomId) return;
       socket.emit("joinRoom", roomId);
     };
 
     socket.on("connect", () => {
-      console.log("[socket] connected:", {
-        socketId: socket.id,
-        url: SOCKET_URL,
-        transport: socket.io.engine.transport.name,
-      });
       setIsSocketConnected(true);
       joinCurrentRoom();
     });
 
-    socket.io.engine.on("upgrade", (transport) => {
-      console.log("[socket] transport upgraded:", transport.name);
+    socket.on("disconnect", () => {
+      setIsSocketConnected(false);
     });
 
     socket.on("connect_error", (error) => {
       console.error("[socket] connect_error:", error.message);
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.warn("[socket] disconnected:", reason);
-      setIsSocketConnected(false);
     });
 
     socket.on("roomJoined", (data) => {
@@ -63,129 +94,227 @@ function Room() {
     });
 
     socket.on("receiveMessage", (data) => {
-      console.log("[receiveMessage] received:", data);
+      if (!data || data.roomId !== roomId) return;
       setMessages((prev) => [...prev, data]);
     });
 
     socket.on("receiveCode", (data) => {
-      console.log("[receiveCode] received:", data);
+      if (!data || data.roomId !== roomId || !data.files) return;
 
-      if (!data || data.roomId !== roomId || typeof data.code !== "string") {
-        console.warn("[receiveCode] ignored invalid or wrong-room payload:", data);
-        return;
-      }
+      const nextCurrentFile =
+        typeof data.currentFile === "string" && data.files[data.currentFile] !== undefined
+          ? data.currentFile
+          : Object.keys(data.files)[0];
 
-      lastRemoteCodeRef.current = data.code;
-      console.log("[receiveCode] applying remote code with setCode:", {
-        roomId: data.roomId,
-        fromSocketId: data.socketId,
-        codeLength: data.code.length,
-        reason: data.reason,
-      });
-      setCode(data.code);
+      lastRemoteEditorValueRef.current = {
+        fileName: nextCurrentFile,
+        code: data.files[nextCurrentFile] || "",
+      };
+
+      setFiles(data.files);
+      setCurrentFile(nextCurrentFile);
     });
 
     return () => {
-      console.log("[socket] cleaning up room socket:", { roomId, socketId: socket.id });
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("connect_error");
+      socket.off("roomJoined");
+      socket.off("receiveMessage");
+      socket.off("receiveCode");
       socket.disconnect();
       socketRef.current = null;
     };
   }, [roomId]);
 
-  const sendMessage = () => {
+  const emitCodeState = (nextFiles, nextCurrentFile) => {
     const socket = socketRef.current;
 
-    if (!message.trim()) return;
+    if (!socket?.connected) return;
 
-    if (!socket?.connected) {
-      console.warn("[sendMessage] socket is not connected");
-      return;
-    }
-
-    const payload = {
+    socket.emit("codeChange", {
       roomId,
-      message,
-    };
+      files: nextFiles,
+      currentFile: nextCurrentFile,
+    });
+  };
 
-    console.log("[sendMessage] emitting:", payload);
-    socket.emit("sendMessage", payload);
+  const sendMessage = () => {
+    const socket = socketRef.current;
+    const trimmedMessage = message.trim();
+
+    if (!trimmedMessage || !socket?.connected) return;
+
+    socket.emit("sendMessage", {
+      roomId,
+      message: trimmedMessage,
+    });
+
     setMessage("");
   };
 
   const handleCodeChange = (value) => {
-    const socket = socketRef.current;
     const updatedCode = value || "";
+    const remoteEditorValue = lastRemoteEditorValueRef.current;
 
-    setCode(updatedCode);
-
-    if (lastRemoteCodeRef.current === updatedCode) {
-      console.log("[codeChange] skipped emit for exact remote Monaco update:", {
-        roomId,
-        codeLength: updatedCode.length,
-      });
-      lastRemoteCodeRef.current = null;
+    if (
+      remoteEditorValue &&
+      remoteEditorValue.fileName === currentFile &&
+      remoteEditorValue.code === updatedCode
+    ) {
+      lastRemoteEditorValueRef.current = null;
       return;
     }
 
-    lastRemoteCodeRef.current = null;
+    setFiles((prevFiles) => {
+      if (prevFiles[currentFile] === updatedCode) return prevFiles;
 
-    if (!socket?.connected) {
-      console.warn("[codeChange] socket is not connected; change was not sent");
-      return;
-    }
+      const nextFiles = {
+        ...prevFiles,
+        [currentFile]: updatedCode,
+      };
 
-    const payload = {
+      emitCodeState(nextFiles, currentFile);
+      return nextFiles;
+    });
+  };
+
+  const handleSwitchFile = (fileName) => {
+    if (!files[fileName] && files[fileName] !== "") return;
+
+    setCurrentFile(fileName);
+    socketRef.current?.emit("switchFile", {
       roomId,
-      code: updatedCode,
+      currentFile: fileName,
+    });
+  };
+
+  const handleCreateFile = (rawFileName) => {
+    const fileName = normalizeFileName(rawFileName);
+
+    if (!fileName || files[fileName] !== undefined) return;
+
+    const nextFiles = {
+      ...files,
+      [fileName]: "",
     };
 
-    console.log("[codeChange] emitting:", {
-      roomId: payload.roomId,
-      codeLength: payload.code.length,
+    setFiles(nextFiles);
+    setCurrentFile(fileName);
+
+    socketRef.current?.emit("createFile", {
+      roomId,
+      fileName,
+    });
+  };
+
+  const handleRenameFile = (oldFileName, rawNewFileName) => {
+    const newFileName = normalizeFileName(rawNewFileName);
+
+    if (!newFileName || oldFileName === newFileName || files[newFileName] !== undefined) {
+      return;
+    }
+
+    const nextFiles = {};
+    Object.entries(files).forEach(([fileName, code]) => {
+      nextFiles[fileName === oldFileName ? newFileName : fileName] = code;
     });
 
-    socket.emit("codeChange", payload);
+    const nextCurrentFile = currentFile === oldFileName ? newFileName : currentFile;
+
+    setFiles(nextFiles);
+    setCurrentFile(nextCurrentFile);
+
+    socketRef.current?.emit("renameFile", {
+      roomId,
+      oldFileName,
+      newFileName,
+    });
+  };
+
+  const handleDeleteFile = (fileName) => {
+    const fileNames = Object.keys(files);
+    if (fileNames.length <= 1 || files[fileName] === undefined) return;
+
+    const nextFiles = { ...files };
+    delete nextFiles[fileName];
+
+    const nextCurrentFile =
+      currentFile === fileName ? Object.keys(nextFiles)[0] : currentFile;
+
+    setFiles(nextFiles);
+    setCurrentFile(nextCurrentFile);
+
+    socketRef.current?.emit("deleteFile", {
+      roomId,
+      fileName,
+    });
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <h1 className="text-3xl text-purple-500 mb-2">Room: {roomId}</h1>
-      <p className="text-sm text-gray-400 mb-6">
-        Socket: {isSocketConnected ? "connected" : "disconnected"}
-      </p>
+    <div className="h-screen overflow-hidden bg-[#1e1e1e] text-white">
+      <header className="flex h-11 items-center justify-between border-b border-[#2d2d30] bg-[#181818] px-4">
+        <div className="min-w-0">
+          <h1 className="truncate text-sm font-semibold text-[#e7e7e7]">
+            CodeFusion AI - Room {roomId}
+          </h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[#a6a6a6]">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              isSocketConnected ? "bg-[#4ec9b0]" : "bg-[#f14c4c]"
+            }`}
+          />
+          {isSocketConnected ? "Live" : "Offline"}
+        </div>
+      </header>
 
-      <div className="bg-gray-900 p-4 rounded h-60 overflow-y-auto">
-        {messages.map((msg, index) => (
-          <div key={`${msg.socketId || "message"}-${index}`} className="bg-purple-700 p-2 rounded mb-2">
-            {msg.message}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex gap-3 mt-4">
-        <input
-          type="text"
-          placeholder="Type message..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          className="flex-1 p-3 rounded bg-gray-800"
+      <div className="flex h-[calc(100vh-44px)] min-h-0">
+        <Explorer
+          files={files}
+          currentFile={currentFile}
+          onCreateFile={handleCreateFile}
+          onRenameFile={handleRenameFile}
+          onDeleteFile={handleDeleteFile}
+          onSwitchFile={handleSwitchFile}
         />
 
-        <button onClick={sendMessage} className="bg-purple-600 px-5 rounded hover:bg-purple-700">
-          Send
-        </button>
-      </div>
+        <main className="flex min-w-0 flex-1 flex-col bg-[#1e1e1e]">
+          <Tabs
+            files={files}
+            currentFile={currentFile}
+            onSwitchFile={handleSwitchFile}
+            onDeleteFile={handleDeleteFile}
+          />
 
-      <div className="mt-8">
-        <Editor
-          height="500px"
-          defaultLanguage="javascript"
-          theme="vs-dark"
-          value={code}
-          onChange={handleCodeChange}
-          onMount={() => {
-            console.log("[monaco] editor mounted:", { roomId });
-          }}
+          <div className="min-h-0 flex-1">
+            <Editor
+              key={currentFile}
+              height="100%"
+              language={getLanguageFromFileName(currentFile)}
+              theme="vs-dark"
+              value={files[currentFile] || ""}
+              onChange={handleCodeChange}
+              options={{
+                minimap: { enabled: true },
+                fontSize: 14,
+                fontFamily:
+                  "Consolas, 'Courier New', monospace",
+                wordWrap: "on",
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                padding: { top: 16, bottom: 16 },
+              }}
+            />
+          </div>
+        </main>
+
+        <ChatBox
+          messages={messages}
+          message={message}
+          onMessageChange={setMessage}
+          onSendMessage={sendMessage}
+          isSocketConnected={isSocketConnected}
         />
       </div>
     </div>
