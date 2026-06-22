@@ -59,6 +59,7 @@ function Room() {
   const [messages, setMessages] = useState([]);
   const [files, setFiles] = useState(initialFiles);
   const [currentFile, setCurrentFile] = useState("App.jsx");
+  const [language, setLanguage] = useState("javascript");
   const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   useEffect(() => {
@@ -259,14 +260,29 @@ function Room() {
             CodeFusion AI - Room {roomId}
           </h1>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[#a6a6a6]">
-          <span
-            className={`h-2 w-2 rounded-full ${
-              isSocketConnected ? "bg-[#4ec9b0]" : "bg-[#f14c4c]"
-            }`}
-          />
-          {isSocketConnected ? "Live" : "Offline"}
-        </div>
+        <div className="flex items-center gap-3 text-xs text-[#a6a6a6]">
+
+  <select
+    value={language}
+    onChange={(e) => setLanguage(e.target.value)}
+    className="rounded bg-[#252526] px-2 py-1 text-white outline-none"
+  >
+    <option value="javascript">JavaScript</option>
+    <option value="python">Python</option>
+    <option value="java">Java</option>
+    <option value="cpp">C++</option>
+    <option value="c">C</option>
+  </select>
+
+  <span
+    className={`h-2 w-2 rounded-full ${
+      isSocketConnected ? "bg-[#4ec9b0]" : "bg-[#f14c4c]"
+    }`}
+  />
+
+  {isSocketConnected ? "Live" : "Offline"}
+
+</div>
       </header>
 
       <div className="flex h-[calc(100vh-44px)] min-h-0">
@@ -289,9 +305,9 @@ function Room() {
 
           <div className="min-h-0 flex-1">
             <Editor
-              key={currentFile}
-              height="100%"
-              language={getLanguageFromFileName(currentFile)}
+         key={currentFile}
+           height="100%"
+      language={language}
               theme="vs-dark"
               value={files[currentFile] || ""}
               onChange={handleCodeChange}
