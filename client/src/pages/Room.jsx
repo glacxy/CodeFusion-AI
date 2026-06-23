@@ -60,6 +60,9 @@ function Room() {
   const [files, setFiles] = useState(initialFiles);
   const [currentFile, setCurrentFile] = useState("App.jsx");
   const [language, setLanguage] = useState("javascript");
+  const [input, setInput] = useState("");
+const [output, setOutput] = useState("");
+const [isRunning, setIsRunning] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   useEffect(() => {
@@ -323,6 +326,45 @@ function Room() {
               }}
             />
           </div>
+          <div className="border-t border-[#2d2d30] bg-[#1e1e1e] p-4">
+
+  {/* Input */}
+  <h2 className="mb-2 text-sm font-semibold text-gray-300">
+    Input
+  </h2>
+
+  <textarea
+    value={input}
+    onChange={(e) => setInput(e.target.value)}
+    className="mb-4 h-24 w-full rounded bg-[#252526] p-3 text-white outline-none"
+    placeholder="Enter input..."
+  />
+
+  {/* Run Button */}
+  <button
+    onClick={() => {
+      setIsRunning(true);
+
+      setTimeout(() => {
+        setOutput("Hello from CodeFusion AI 🚀");
+        setIsRunning(false);
+      }, 1000);
+    }}
+    className="mb-4 rounded bg-green-600 px-5 py-2 hover:bg-green-700"
+  >
+    {isRunning ? "Running..." : "▶ Run"}
+  </button>
+
+  {/* Output */}
+  <h2 className="mb-2 text-sm font-semibold text-gray-300">
+    Output
+  </h2>
+
+  <div className="h-40 overflow-auto rounded bg-black p-3 text-green-400">
+    <pre>{output}</pre>
+  </div>
+
+</div>
         </main>
 
         <ChatBox
