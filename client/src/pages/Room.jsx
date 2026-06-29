@@ -342,14 +342,32 @@ const [isRunning, setIsRunning] = useState(false);
 
   {/* Run Button */}
   <button
-    onClick={() => {
-      setIsRunning(true);
+  onClick={async () => {
+  try {
+    setIsRunning(true);
 
-      setTimeout(() => {
-        setOutput("Hello from CodeFusion AI 🚀");
-        setIsRunning(false);
-      }, 1000);
-    }}
+    const response = await fetch("http://localhost:5000/api/code/run", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        language,
+        code: files[currentFile],
+        input,
+      }),
+    });
+
+    const data = await response.json();
+
+    setOutput(data.run.stdout || data.run.stderr || "No Output");
+  } catch (err) {
+    console.error(err);
+    setOutput("Execution Failed");
+  } finally {
+    setIsRunning(false);
+  }
+}}
     className="mb-4 rounded bg-green-600 px-5 py-2 hover:bg-green-700"
   >
     {isRunning ? "Running..." : "▶ Run"}
