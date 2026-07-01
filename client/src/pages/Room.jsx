@@ -343,31 +343,51 @@ const [isRunning, setIsRunning] = useState(false);
   {/* Run Button */}
   <button
   onClick={async () => {
-  try {
-    setIsRunning(true);
+    try {
+      setIsRunning(true);
 
-    const response = await fetch("http://localhost:5000/api/code/run", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+      const requestBody = {
         language,
         code: files[currentFile],
         input,
-      }),
-    });
+      };
 
-    const data = await response.json();
+      console.log("[Room] /api/code/run request body:", requestBody);
 
-    setOutput(data.run.stdout || data.run.stderr || "No Output");
-  } catch (err) {
-    console.error(err);
-    setOutput("Execution Failed");
-  } finally {
-    setIsRunning(false);
-  }
-}}
+      const response = await fetch("http://localhost:5000/api/code/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+      console.log("[Room] /api/code/run response:", data);
+
+      if (!response.ok) {
+        const errorMessage = data?.message || "Execution Failed";
+        setOutput(errorMessage);
+        return;
+      }
+
+      const runOutput = data?.run?.stdout || data?.run?.output || "";
+      const runError = data?.run?.stderr || "";
+      const compileError = data?.compile?.stderr || data?.compile?.stdout || "";
+      const responseOutput = data?.output || "";
+
+      const outputText = [runOutput, runError, compileError, responseOutput]
+        .filter((value) => typeof value === "string" && value.trim().length > 0)
+        .join("\n") || "No Output";
+
+      setOutput(outputText);
+    } catch (err) {
+      console.error("[Room] /api/code/run error:", err);
+      setOutput(err?.message || "Execution Failed");
+    } finally {
+      setIsRunning(false);
+    }
+  }}
     className="mb-4 rounded bg-green-600 px-5 py-2 hover:bg-green-700"
   >
     {isRunning ? "Running..." : "▶ Run"}
