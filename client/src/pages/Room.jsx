@@ -6,6 +6,7 @@ import { io } from "socket.io-client";
 import ChatBox from "../components/ChatBox";
 import Explorer from "../components/Explorer";
 import Tabs from "../components/Tabs";
+import { executeCode } from "../api/executeApi";
 
 const SOCKET_URL = "http://localhost:5000";
 
@@ -61,8 +62,8 @@ function Room() {
   const [currentFile, setCurrentFile] = useState("App.jsx");
   const [language, setLanguage] = useState("javascript");
   const [input, setInput] = useState("");
-const [output, setOutput] = useState("");
-const [isRunning, setIsRunning] = useState(false);
+  const [output, setOutput] = useState(null); // null = no result yet
+  const [isRunning, setIsRunning] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   useEffect(() => {
@@ -271,6 +272,7 @@ const [isRunning, setIsRunning] = useState(false);
     className="rounded bg-[#252526] px-2 py-1 text-white outline-none"
   >
     <option value="javascript">JavaScript</option>
+    <option value="typescript">TypeScript</option>
     <option value="python">Python</option>
     <option value="java">Java</option>
     <option value="cpp">C++</option>
@@ -336,32 +338,119 @@ const [isRunning, setIsRunning] = useState(false);
   <textarea
     value={input}
     onChange={(e) => setInput(e.target.value)}
-    className="mb-4 h-24 w-full rounded bg-[#252526] p-3 text-white outline-none"
-    placeholder="Enter input..."
+    className="mb-4 h-24 w-full rounded bg-[#252526] p-3 font-mono text-sm text-white outline-none"
+    placeholder="Enter stdin input (optional)..."
   />
 
   {/* Run Button */}
   <button
-    onClick={() => {
+    disabled={isRunning}
+    onClick={async () => {
       setIsRunning(true);
-
-      setTimeout(() => {
-        setOutput("Hello from CodeFusion AI 🚀");
+      setOutput(null);
+      try {
+        const code = files[currentFile] || "";
+        const result = await executeCode(language, code, input);
+        setOutput(result);
+      } catch (err) {
+        // Axios wraps HTTP error responses — extract the JSON body if present
+        const apiError = err?.response?.data;
+        setOutput({
+          success: false,
+          status: "Error",
+          error: apiError?.error || "Execution failed",
+          stderr: apiError?.detail || err.message || "Unknown error",
+          stdout: "",
+          compileOutput: "",
+        });
+      } finally {
         setIsRunning(false);
-      }, 1000);
+      }
     }}
-    className="mb-4 rounded bg-green-600 px-5 py-2 hover:bg-green-700"
+    className="mb-4 rounded bg-green-600 px-5 py-2 font-semibold hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
   >
-    {isRunning ? "Running..." : "▶ Run"}
+    {isRunning ? "⏳ Running..." : "▶ Run"}
   </button>
 
-  {/* Output */}
-  <h2 className="mb-2 text-sm font-semibold text-gray-300">
-    Output
-  </h2>
+  {/* Output Panel */}
+  <h2 className="mb-2 text-sm font-semibold text-gray-300">Output</h2>
 
-  <div className="h-40 overflow-auto rounded bg-black p-3 text-green-400">
-    <pre>{output}</pre>
+  <div className="rounded bg-black p-3 font-mono text-sm">
+    {output === null ? (
+      <p className="text-[#858585]">Run your code to see output here.</p>
+    ) : (
+      <>
+        {/* Status badge */}
+        <div className="mb-2 flex items-center gap-3">
+          <span
+            className={`rounded px-2 py-0.5 text-xs font-semibold ${
+              output.status === "Accepted"
+                ? "bg-green-900 text-green-300"
+                : "bg-red-900 text-red-300"
+            }`}
+          >
+            {output.status || "Error"}
+          </span>
+          {output.version && (
+            <span className="text-xs text-[#858585]">
+              {output.displayName || language} {output.version}
+            </span>
+          )}
+          {output.runtime !== undefined && (
+            <span className="text-xs text-[#858585]">{output.runtime}ms</span>
+          )}
+        </div>
+
+        {/* Compile errors */}
+        {output.compileOutput ? (
+          <div className="mb-3">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-yellow-400">
+              Compile Output
+            </p>
+            <pre className="whitespace-pre-wrap break-words text-yellow-300">
+              {output.compileOutput}
+            </pre>
+          </div>
+        ) : null}
+
+        {/* stdout */}
+        {output.stdout ? (
+          <div className="mb-3">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-green-400">
+              stdout
+            </p>
+            <pre className="whitespace-pre-wrap break-words text-green-300">
+              {output.stdout}
+            </pre>
+          </div>
+        ) : null}
+
+        {/* stderr */}
+        {output.stderr ? (
+          <div className="mb-3">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-400">
+              stderr
+            </p>
+            <pre className="whitespace-pre-wrap break-words text-red-300">
+              {output.stderr}
+            </pre>
+          </div>
+        ) : null}
+
+        {/* Generic error (network / validation) */}
+        {output.error && !output.stdout && !output.stderr && !output.compileOutput ? (
+          <pre className="whitespace-pre-wrap break-words text-red-400">
+            {output.error}
+            {output.stderr ? `\n${output.stderr}` : ""}
+          </pre>
+        ) : null}
+
+        {/* Empty output notice */}
+        {!output.stdout && !output.stderr && !output.compileOutput && !output.error && (
+          <p className="text-[#858585]">(no output)</p>
+        )}
+      </>
+    )}
   </div>
 
 </div>

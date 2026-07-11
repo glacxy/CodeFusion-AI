@@ -1,14 +1,15 @@
+const dotenv = require("dotenv");
+dotenv.config();
+
 const express = require("express");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const http = require("http");
 const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const roomRoutes = require("./routes/roomRoutes");
-
-dotenv.config();
+const executeRoutes = require("./routes/executeRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -319,6 +320,7 @@ io.on("connection", (socket) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
+app.use("/api/execute", executeRoutes);
 
 app.get("/db-test", (req, res) => {
   res.send("DB Test Route Working");
@@ -337,6 +339,7 @@ const startServer = async () => {
     server.listen(PORT, () => {
       console.log(`[server] running on port ${PORT}`);
       console.log("[server] CORS accepts http://localhost:<any-port> and http://127.0.0.1:<any-port>");
+      console.log(`[server] Piston mode: ${process.env.PISTON_MODE || "public"} | timeout: ${process.env.PISTON_TIMEOUT || 15000}ms`);
     });
   } catch (error) {
     console.error("[server] failed to connect database:", error);
