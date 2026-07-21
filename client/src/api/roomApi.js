@@ -16,6 +16,6 @@ export const getRooms = (token) => {
 return API.get("/rooms", {
 headers: {
 Authorization: `Bearer ${token}`,
-},
+}, 
 });
 };

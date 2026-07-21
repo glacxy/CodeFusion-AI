@@ -6,6 +6,7 @@ import { io } from "socket.io-client";
 import ChatBox from "../components/ChatBox";
 import Explorer from "../components/Explorer";
 import Tabs from "../components/Tabs";
+import OutputConsole from "../components/OutputConsole/OutputConsole";
 import { executeCode } from "../api/executeApi";
 
 const SOCKET_URL = "http://localhost:5000";
@@ -41,14 +42,6 @@ export default Room;
 `,
 };
 
-const getLanguageFromFileName = (fileName) => {
-  if (fileName.endsWith(".json")) return "json";
-  if (fileName.endsWith(".css")) return "css";
-  if (fileName.endsWith(".html")) return "html";
-  if (fileName.endsWith(".ts") || fileName.endsWith(".tsx")) return "typescript";
-  return "javascript";
-};
-
 const normalizeFileName = (fileName) => fileName.trim().replace(/^\/+/, "");
 
 function Room() {
@@ -63,6 +56,8 @@ function Room() {
   const [language, setLanguage] = useState("javascript");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(null); // null = no result yet
+  const [activeTerminalTab, setActiveTerminalTab] = useState("output");
+  const [executionTimestamp, setExecutionTimestamp] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
 
@@ -256,6 +251,30 @@ function Room() {
     });
   };
 
+  const handleRun = async () => {
+    setIsRunning(true);
+    setOutput(null);
+    try {
+      const code = files[currentFile] || "";
+      const result = await executeCode(language, code, input);
+      setOutput(result);
+      setExecutionTimestamp(new Date());
+    } catch (err) {
+      const apiError = err?.response?.data;
+      setOutput({
+        success: false,
+        status: "Error",
+        error: apiError?.error || "Execution failed",
+        stderr: apiError?.detail || err.message || "Unknown error",
+        stdout: "",
+        compileOutput: "",
+      });
+      setExecutionTimestamp(new Date());
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-[#1e1e1e] text-white">
       <header className="flex h-11 items-center justify-between border-b border-[#2d2d30] bg-[#181818] px-4">
@@ -329,18 +348,31 @@ function Room() {
             />
           </div>
           <div className="border-t border-[#2d2d30] bg-[#1e1e1e] p-4">
+  {/* Standard input */}
+  <div className="mb-4">
+    <div className="mb-2 flex items-center justify-between">
+      <label htmlFor="stdin" className="text-sm font-semibold text-gray-300">
+        Standard Input
+      </label>
+      <button
+        type="button"
+        onClick={() => setInput("")}
+        disabled={!input}
+        className="rounded px-2 py-1 text-xs font-medium text-[#c5c5c5] transition hover:bg-[#3c3c3c] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Clear
+      </button>
+    </div>
 
-  {/* Input */}
-  <h2 className="mb-2 text-sm font-semibold text-gray-300">
-    Input
-  </h2>
-
-  <textarea
-    value={input}
-    onChange={(e) => setInput(e.target.value)}
-    className="mb-4 h-24 w-full rounded bg-[#252526] p-3 font-mono text-sm text-white outline-none"
-    placeholder="Enter stdin input (optional)..."
-  />
+    <textarea
+      id="stdin"
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      spellCheck="false"
+      className="min-h-24 max-h-72 w-full resize-y rounded border border-[#3c3c3c] bg-[#252526] p-3 font-mono text-sm leading-6 text-white outline-none transition placeholder:text-[#858585] focus:border-[#007fd4] focus:ring-1 focus:ring-[#007fd4]"
+      placeholder={"Provide input exactly as your program reads it.\nEach line is sent as a separate stdin line."}
+    />
+  </div>
 
   {/* Run Button */}
   <button
@@ -348,10 +380,12 @@ function Room() {
     onClick={async () => {
       setIsRunning(true);
       setOutput(null);
+      setActiveTerminalTab("output");
       try {
         const code = files[currentFile] || "";
         const result = await executeCode(language, code, input);
         setOutput(result);
+        setExecutionTimestamp(new Date());
       } catch (err) {
         // Axios wraps HTTP error responses — extract the JSON body if present
         const apiError = err?.response?.data;
@@ -363,6 +397,7 @@ function Room() {
           stdout: "",
           compileOutput: "",
         });
+        setExecutionTimestamp(new Date());
       } finally {
         setIsRunning(false);
       }
@@ -372,86 +407,119 @@ function Room() {
     {isRunning ? "⏳ Running..." : "▶ Run"}
   </button>
 
-  {/* Output Panel */}
-  <h2 className="mb-2 text-sm font-semibold text-gray-300">Output</h2>
-
-  <div className="rounded bg-black p-3 font-mono text-sm">
-    {output === null ? (
-      <p className="text-[#858585]">Run your code to see output here.</p>
-    ) : (
-      <>
-        {/* Status badge */}
-        <div className="mb-2 flex items-center gap-3">
-          <span
-            className={`rounded px-2 py-0.5 text-xs font-semibold ${
-              output.status === "Accepted"
-                ? "bg-green-900 text-green-300"
-                : "bg-red-900 text-red-300"
+  {/* Legacy terminal retained during the visual migration; it is not rendered. */}
+  {activeTerminalTab === "legacy" && <section className="overflow-hidden rounded-lg border border-[#343434] bg-[#111111] shadow-[0_8px_24px_rgba(0,0,0,0.28)]">
+    <div className="flex items-center justify-between border-b border-[#2d2d30] bg-[#1b1b1b] pl-2">
+      <div className="flex" role="tablist" aria-label="Execution terminal">
+        {[
+          ["output", "Output"],
+          ["errors", "Errors"],
+          ["info", "Execution Info"],
+        ].map(([tab, label]) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTerminalTab === tab}
+            onClick={() => setActiveTerminalTab(tab)}
+            className={`border-b-2 px-3 py-2 text-xs font-medium transition ${
+              activeTerminalTab === tab
+                ? "border-[#007fd4] bg-[#252526] text-white"
+                : "border-transparent text-[#a6a6a6] hover:bg-[#252526] hover:text-[#e7e7e7]"
             }`}
           >
-            {output.status || "Error"}
-          </span>
-          {output.version && (
-            <span className="text-xs text-[#858585]">
-              {output.displayName || language} {output.version}
-            </span>
-          )}
-          {output.runtime !== undefined && (
-            <span className="text-xs text-[#858585]">{output.runtime}ms</span>
-          )}
-        </div>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1 pr-2">
+        <button
+          type="button"
+          onClick={() => navigator.clipboard?.writeText(output?.stdout || "")}
+          disabled={!output?.stdout}
+          className="rounded px-2 py-1 text-xs text-[#c5c5c5] transition hover:bg-[#333333] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Copy output
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOutput(null);
+            setExecutionTimestamp(null);
+            setActiveTerminalTab("output");
+          }}
+          disabled={!output}
+          className="rounded px-2 py-1 text-xs text-[#c5c5c5] transition hover:bg-[#333333] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
 
-        {/* Compile errors */}
-        {output.compileOutput ? (
-          <div className="mb-3">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-yellow-400">
-              Compile Output
-            </p>
-            <pre className="whitespace-pre-wrap break-words text-yellow-300">
-              {output.compileOutput}
-            </pre>
-          </div>
-        ) : null}
-
-        {/* stdout */}
-        {output.stdout ? (
-          <div className="mb-3">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-green-400">
-              stdout
-            </p>
-            <pre className="whitespace-pre-wrap break-words text-green-300">
-              {output.stdout}
-            </pre>
-          </div>
-        ) : null}
-
-        {/* stderr */}
-        {output.stderr ? (
-          <div className="mb-3">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-400">
-              stderr
-            </p>
-            <pre className="whitespace-pre-wrap break-words text-red-300">
-              {output.stderr}
-            </pre>
-          </div>
-        ) : null}
-
-        {/* Generic error (network / validation) */}
-        {output.error && !output.stdout && !output.stderr && !output.compileOutput ? (
-          <pre className="whitespace-pre-wrap break-words text-red-400">
-            {output.error}
-            {output.stderr ? `\n${output.stderr}` : ""}
+    <div className="h-56 overflow-auto bg-[#0c0c0c] p-4 font-mono text-sm leading-6">
+      {output === null ? (
+        <p className="text-[#858585]">Run your code to see terminal output.</p>
+      ) : activeTerminalTab === "output" ? (
+        output.stdout ? (
+          <pre className="whitespace-pre-wrap break-words text-[#d4d4d4]">
+            <span className="select-none text-[#4ec9b0]">$ </span>
+            {output.stdout}
           </pre>
-        ) : null}
+        ) : (
+          <p className="text-[#858585]">(no standard output)</p>
+        )
+      ) : activeTerminalTab === "errors" ? (
+        output.compileOutput || output.stderr || output.error ? (
+          <div className="space-y-4">
+            {output.compileOutput ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#dcdcaa]">Compile error</p>
+                <pre className="whitespace-pre-wrap break-words text-[#dcdcaa]">{output.compileOutput}</pre>
+              </div>
+            ) : null}
+            {output.stderr ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#f48771]">Standard error</p>
+                <pre className="whitespace-pre-wrap break-words text-[#f48771]">{output.stderr}</pre>
+              </div>
+            ) : null}
+            {output.error && !output.stderr ? (
+              <pre className="whitespace-pre-wrap break-words text-[#f48771]">{output.error}</pre>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-[#858585]">(no errors)</p>
+        )
+      ) : (
+        <dl className="grid max-w-xl grid-cols-[9rem_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt className="text-[#9cdcfe]">Runtime</dt>
+          <dd className="text-[#d4d4d4]">{output.runtime !== undefined ? `${output.runtime} ms` : "—"}</dd>
+          <dt className="text-[#9cdcfe]">Memory</dt>
+          <dd className="text-[#d4d4d4]">{output.memory !== undefined ? `${output.memory} MB` : "—"}</dd>
+          <dt className="text-[#9cdcfe]">Exit Code</dt>
+          <dd className="text-[#d4d4d4]">{output.exitCode ?? "—"}</dd>
+          <dt className="text-[#9cdcfe]">Language</dt>
+          <dd className="text-[#d4d4d4]">{output.displayName || language}{output.version ? ` ${output.version}` : ""}</dd>
+          <dt className="text-[#9cdcfe]">Timestamp</dt>
+          <dd className="text-[#d4d4d4]">{executionTimestamp?.toLocaleString() || "—"}</dd>
+          <dt className="text-[#9cdcfe]">Status</dt>
+          <dd className={output.status === "Accepted" ? "text-[#4ec9b0]" : "text-[#f48771]"}>{output.status || "Error"}</dd>
+        </dl>
+      )}
+    </div>
+  </section>}
 
-        {/* Empty output notice */}
-        {!output.stdout && !output.stderr && !output.compileOutput && !output.error && (
-          <p className="text-[#858585]">(no output)</p>
-        )}
-      </>
-    )}
-  </div>
+  <OutputConsole
+    output={output}
+    isRunning={isRunning}
+    language={language}
+    timestamp={executionTimestamp}
+    onRerun={handleRun}
+    onClear={() => {
+      setOutput(null);
+      setExecutionTimestamp(null);
+    }}
+  />
 
 </div>
         </main>

@@ -1,13 +1,38 @@
+# docker-compose.yml
+# CodeFusion AI — Piston execution engine only.
+#
+# Usage:
+#   Start:    docker compose up -d
+#   Stop:     docker compose down
+#   Logs:     docker compose logs -f piston
+#   Status:   docker compose ps
+#
+# After starting, verify Piston is ready:
+#   curl http://localhost:2000/api/v2/runtimes
+#
+# To install language runtimes after container starts:
+#   docker compose exec piston piston install python 3.10.0
+#   docker compose exec piston piston install javascript 18.15.0
+#   docker compose exec piston piston install java 15.0.2
+#   docker compose exec piston piston install c++ 10.2.0
+#   docker compose exec piston piston install c 10.2.0
+#   docker compose exec piston piston install typescript 5.0.3
+#
+# NOTE: Requires Docker Desktop with WSL2 backend on Windows.
+# The public Piston API (PISTON_MODE=public in server/.env) works without Docker.
+
 services:
   piston:
-    image: ghcr.io/engineer-man/piston:latest
+    image: ghcr.io/engineer-man/piston
     container_name: codefusion-piston
     restart: unless-stopped
-    privileged: true
     ports:
       - "2000:2000"
+    privileged: true
     volumes:
       - piston-data:/piston
+    environment:
+      PISTON_DISABLE_NETWORKING: "false"
 
 volumes:
   piston-data:
