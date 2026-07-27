@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { loginUser } from "../api/authApi";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = new URLSearchParams(location.search).get("redirect") || "/dashboard";
 
   const handleLogin = async () => {
     setError("");
@@ -18,7 +20,9 @@ function Login() {
       });
 
       localStorage.setItem("token", response.data.token);
-      navigate("/dashboard");
+      localStorage.setItem("username", response.data.username || identifier);
+      localStorage.setItem("userId", response.data.userId || "");
+      navigate(redirectTo);
     } catch (error) {
       setError(error.response?.data?.message || "Login failed. Please try again.");
     }

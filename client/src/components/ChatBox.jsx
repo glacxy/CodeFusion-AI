@@ -4,6 +4,11 @@ function ChatBox({
   onMessageChange,
   onSendMessage,
   isSocketConnected,
+  roomUsers = [],
+  inviteUrl = "",
+  onCopyInvite,
+  onShareInvite,
+  currentUserName = "",
 }) {
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -11,7 +16,7 @@ function ChatBox({
   };
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-[#2d2d30] bg-[#252526] text-[#cccccc]">
+    <aside className="flex h-full w-[22rem] max-w-full shrink-0 flex-col border-l border-[#2d2d30] bg-[#252526] text-[#cccccc]">
       <div className="flex h-10 items-center justify-between border-b border-[#2d2d30] px-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-[#bbbbbb]">
           Chat
@@ -22,6 +27,76 @@ function ChatBox({
           }`}
           title={isSocketConnected ? "Connected" : "Disconnected"}
         />
+      </div>
+
+      <div className="space-y-4 border-b border-[#2d2d30] p-3">
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[#bbbbbb]">
+              Online Users
+            </h3>
+            <span className="text-[11px] text-[#4ec9b0]">{roomUsers.length} online</span>
+          </div>
+
+          <div className="space-y-2">
+            {roomUsers.length === 0 ? (
+              <p className="text-sm text-[#858585]">No one is here yet.</p>
+            ) : (
+              roomUsers.map((user) => {
+                const displayName = user.username || "Guest";
+                const isCurrentUser = currentUserName && displayName === currentUserName;
+
+                return (
+                  <div
+                    key={user.socketId}
+                    className="flex items-center justify-between rounded border border-[#3c3c3c] bg-[#1e1e1e] px-2.5 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0e639c] text-xs font-semibold uppercase text-white">
+                        {displayName.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-[#f3f3f3]">
+                          {displayName}
+                          {isCurrentUser ? " (You)" : ""}
+                        </p>
+                        {user.isHost ? (
+                          <p className="text-[11px] text-[#4ec9b0]">Host</p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#4ec9b0]" title="Online" />
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#bbbbbb]">
+            Invite Friends
+          </h3>
+          <div className="rounded border border-[#3c3c3c] bg-[#1e1e1e] p-2.5">
+            <p className="break-all text-sm text-[#d4d4d4]">{inviteUrl}</p>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={onCopyInvite}
+              className="flex-1 rounded bg-[#0e639c] px-2.5 py-2 text-sm font-medium text-white hover:bg-[#1177bb]"
+            >
+              Copy Link
+            </button>
+            <button
+              type="button"
+              onClick={onShareInvite}
+              className="flex-1 rounded border border-[#3c3c3c] bg-[#2d2d30] px-2.5 py-2 text-sm font-medium text-[#f3f3f3] hover:bg-[#3c3c3c]"
+            >
+              Share
+            </button>
+          </div>
+        </section>
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import { io } from "socket.io-client";
 
@@ -46,6 +46,7 @@ const normalizeFileName = (fileName) => fileName.trim().replace(/^\/+/, "");
 
 function Room() {
   const { roomId } = useParams();
+  const navigate = useNavigate();
   const socketRef = useRef(null);
   const lastRemoteEditorValueRef = useRef(null);
 
@@ -60,6 +61,31 @@ function Room() {
   const [executionTimestamp, setExecutionTimestamp] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [roomUsers, setRoomUsers] = useState([]);
+  const [toastMessage, setToastMessage] = useState("");
+  const [inviteUrl, setInviteUrl] = useState("");
+
+  const currentUserName = localStorage.getItem("username") || "Guest";
+  const currentUserId = localStorage.getItem("userId") || "";
+
+  useEffect(() => {
+    if (!roomId) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate(`/login?redirect=${encodeURIComponent(`/room/${roomId}`)}`);
+      return;
+    }
+
+    setInviteUrl(`${window.location.origin}/room/${roomId}`);
+  }, [navigate, roomId]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+
+    const timer = window.setTimeout(() => setToastMessage(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
 
   useEffect(() => {
     const socket = io(SOCKET_URL, {
@@ -73,7 +99,13 @@ function Room() {
 
     const joinCurrentRoom = () => {
       if (!roomId) return;
-      socket.emit("joinRoom", roomId);
+      socket.emit("joinRoom", {
+        roomId,
+        user: {
+          id: currentUserId,
+          username: currentUserName,
+        },
+      });
     };
 
     socket.on("connect", () => {
@@ -96,6 +128,20 @@ function Room() {
     socket.on("receiveMessage", (data) => {
       if (!data || data.roomId !== roomId) return;
       setMessages((prev) => [...prev, data]);
+    });
+
+    socket.on("room_users", (participants) => {
+      setRoomUsers(Array.isArray(participants) ? participants : []);
+    });
+
+    socket.on("user_joined", (participant) => {
+      if (!participant?.username) return;
+      setToastMessage(`${participant.username} joined the room.`);
+    });
+
+    socket.on("user_left", (participant) => {
+      if (!participant?.username) return;
+      setToastMessage(`${participant.username} left the room.`);
     });
 
     socket.on("receiveCode", (data) => {
@@ -121,11 +167,14 @@ function Room() {
       socket.off("connect_error");
       socket.off("roomJoined");
       socket.off("receiveMessage");
+      socket.off("room_users");
+      socket.off("user_joined");
+      socket.off("user_left");
       socket.off("receiveCode");
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomId]);
+  }, [roomId, currentUserId, currentUserName]);
 
   const emitCodeState = (nextFiles, nextCurrentFile) => {
     const socket = socketRef.current;
@@ -275,6 +324,37 @@ function Room() {
     }
   };
 
+  const handleCopyInvite = async () => {
+    if (!inviteUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setToastMessage("Invite link copied!");
+    } catch (error) {
+      console.error("Failed to copy invite link", error);
+      setToastMessage("Unable to copy invite link.");
+    }
+  };
+
+  const handleShareInvite = async () => {
+    if (!inviteUrl) return;
+
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: "Join this room",
+          url: inviteUrl,
+        });
+        setToastMessage("Invite link shared!");
+      } catch (error) {
+        console.error("Share cancelled", error);
+      }
+      return;
+    }
+
+    handleCopyInvite();
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-[#1e1e1e] text-white">
       <header className="flex h-11 items-center justify-between border-b border-[#2d2d30] bg-[#181818] px-4">
@@ -309,7 +389,13 @@ function Room() {
 </div>
       </header>
 
-      <div className="flex h-[calc(100vh-44px)] min-h-0">
+      <div className="relative flex h-[calc(100vh-44px)] min-h-0">
+        {toastMessage ? (
+          <div className="pointer-events-none absolute right-4 top-4 z-20 rounded border border-[#3c3c3c] bg-[#1e1e1e]/95 px-4 py-2 text-sm text-[#f3f3f3] shadow-lg">
+            {toastMessage}
+          </div>
+        ) : null}
+
         <Explorer
           files={files}
           currentFile={currentFile}
@@ -530,6 +616,11 @@ function Room() {
           onMessageChange={setMessage}
           onSendMessage={sendMessage}
           isSocketConnected={isSocketConnected}
+          roomUsers={roomUsers}
+          inviteUrl={inviteUrl}
+          onCopyInvite={handleCopyInvite}
+          onShareInvite={handleShareInvite}
+          currentUserName={currentUserName}
         />
       </div>
     </div>
