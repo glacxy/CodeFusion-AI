@@ -1,15 +1,21 @@
 
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
-const dotenv = require("dotenv");
+
 const http = require("http");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const roomRoutes = require("./routes/roomRoutes");
 const executeRoutes = require("./routes/executeRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 
-dotenv.config();
+
+
+
+
 
 const app = express();
 const server = http.createServer(app);
@@ -119,6 +125,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/execute", executeRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.get("/db-test", (req, res) => {
   res.send("DB Test Route Working");

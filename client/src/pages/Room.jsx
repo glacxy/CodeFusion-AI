@@ -7,6 +7,7 @@ import ChatBox from "../components/ChatBox";
 import Explorer from "../components/Explorer";
 import Tabs from "../components/Tabs";
 import OutputConsole from "../components/OutputConsole/OutputConsole";
+import AIAssistantPanel from "../components/AIAssistantPanel/AIAssistantPanel";
 import { executeCode } from "../api/executeApi";
 
 const SOCKET_URL = "http://localhost:5000";
@@ -64,6 +65,9 @@ function Room() {
   const [roomUsers, setRoomUsers] = useState([]);
   const [toastMessage, setToastMessage] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
+  const [isAIOpen, setIsAIOpen] = useState(false);
+  const [selectedCode, setSelectedCode] = useState("");
+  const editorRef = useRef(null);
 
   const currentUserName = localStorage.getItem("username") || "Guest";
   const currentUserId = localStorage.getItem("userId") || "";
@@ -355,6 +359,20 @@ function Room() {
     handleCopyInvite();
   };
 
+  const handleEditorMount = (editor) => {
+    editorRef.current = editor;
+
+    // Handle text selection
+    editor.onDidChangeCursorSelection((e) => {
+      const selection = editor.getSelectedText();
+      setSelectedCode(selection);
+    });
+  };
+
+  const openAIPanel = (feature = null) => {
+    setIsAIOpen(true);
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-[#1e1e1e] text-white">
       <header className="flex h-11 items-center justify-between border-b border-[#2d2d30] bg-[#181818] px-4">
@@ -421,6 +439,7 @@ function Room() {
               theme="vs-dark"
               value={files[currentFile] || ""}
               onChange={handleCodeChange}
+              onMount={handleEditorMount}
               options={{
                 minimap: { enabled: true },
                 fontSize: 14,
@@ -492,6 +511,41 @@ function Room() {
   >
     {isRunning ? "⏳ Running..." : "▶ Run"}
   </button>
+
+  {/* AI Buttons */}
+  <div className="mb-4 flex gap-2">
+    <button
+      onClick={() => openAIPanel("explain")}
+      disabled={!selectedCode}
+      className="rounded bg-purple-600 px-3 py-2 text-sm font-semibold hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+      title="Explain the selected code"
+    >
+      📖 Explain
+    </button>
+    <button
+      onClick={() => openAIPanel("optimize")}
+      className="rounded bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-700"
+      title="Optimize the current code"
+    >
+      ⚡ Optimize
+    </button>
+    <button
+      onClick={() => openAIPanel("review")}
+      className="rounded bg-cyan-600 px-3 py-2 text-sm font-semibold hover:bg-cyan-700"
+      title="Review the current code"
+    >
+      🔍 Review
+    </button>
+    {output && !output.success && (
+      <button
+        onClick={() => openAIPanel("error")}
+        className="rounded bg-red-600 px-3 py-2 text-sm font-semibold hover:bg-red-700"
+        title="Get help with the error"
+      >
+        🐛 Fix Error
+      </button>
+    )}
+  </div>
 
   {/* Legacy terminal retained during the visual migration; it is not rendered. */}
   {activeTerminalTab === "legacy" && <section className="overflow-hidden rounded-lg border border-[#343434] bg-[#111111] shadow-[0_8px_24px_rgba(0,0,0,0.28)]">
@@ -623,6 +677,16 @@ function Room() {
           currentUserName={currentUserName}
         />
       </div>
+
+      {/* AI Assistant Panel */}
+      <AIAssistantPanel
+        isOpen={isAIOpen}
+        onClose={() => setIsAIOpen(false)}
+        code={files[currentFile] || ""}
+        language={language}
+        errorMessage={output && !output.success ? (output.error || output.stderr) : null}
+        selectedCode={selectedCode}
+      />
     </div>
   );
 }
