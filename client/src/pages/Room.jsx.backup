@@ -1,0 +1,13 @@
+// BACKUP — original Room.jsx before Piston migration
+// Mock execution logic that was replaced:
+//
+// onClick={() => {
+//   setIsRunning(true);
+//   setTimeout(() => {
+//     setOutput("Hello from CodeFusion AI 🚀");
+//     setIsRunning(false);
+//   }, 1000);
+// }}
+//
+// This stub used a fake 1-second delay and hardcoded output.
+// It has been replaced with a real POST /api/execute call to Piston.

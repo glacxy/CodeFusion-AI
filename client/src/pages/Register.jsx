@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { registerUser } from "../api/authApi";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 function Register() {
   const [username, setUsername] = useState("");
@@ -9,6 +9,8 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
 const navigate = useNavigate();
+const location = useLocation();
+const redirectTo = new URLSearchParams(location.search).get("redirect") || "/dashboard";
 const handleRegister = async () => {
   setError("");
 
@@ -31,8 +33,10 @@ const handleRegister = async () => {
       "token",
       response.data.token
     );
+    localStorage.setItem("username", response.data.username || username);
+    localStorage.setItem("userId", response.data.userId || "");
 
-    navigate("/dashboard");
+    navigate(redirectTo);
 
   } catch (error) {
 
