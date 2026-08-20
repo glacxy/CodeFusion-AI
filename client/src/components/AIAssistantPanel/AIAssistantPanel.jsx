@@ -15,12 +15,14 @@ import CodeExplanation from "./CodeExplanation";
 export default function AIAssistantPanel({ 
   isOpen, 
   onClose, 
+  feature,
   code, 
   language, 
   errorMessage,
+  errorDetails,
   selectedCode 
 }) {
-  const [activeTab, setActiveTab] = useState("error");
+  const [activeTab, setActiveTab] = useState(feature || "review");
   const [aiAvailable, setAiAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -133,6 +135,7 @@ export default function AIAssistantPanel({
                 <ErrorExplanation 
                   code={code} 
                   errorMessage={errorMessage} 
+                  errorDetails={errorDetails}
                   language={language} 
                 />
               )}

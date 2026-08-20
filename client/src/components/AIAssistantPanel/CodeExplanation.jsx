@@ -77,11 +77,11 @@ export default function CodeExplanation({ code, language }) {
           </div>
 
           {/* Key Concepts */}
-          {result.keyConepts && result.keyConepts.length > 0 && (
+          {result.keyConcepts && result.keyConcepts.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
               <h3 className="font-semibold text-orange-900 mb-2">📚 Key Concepts:</h3>
               <div className="flex flex-wrap gap-2">
-                {result.keyConepts.map((concept, idx) => (
+                {result.keyConcepts.map((concept, idx) => (
                   <span
                     key={idx}
                     className="bg-orange-200 text-orange-900 px-3 py-1 rounded-full text-sm"

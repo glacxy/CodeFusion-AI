@@ -5,15 +5,16 @@
  */
 
 import axios from "axios";
+import { API_BASE_URL } from "../config";
 
-const API_BASE_URL = "http://localhost:5000/api/ai";
+const AI_API_BASE_URL = `${API_BASE_URL}/api/ai`;
 
 /**
  * Check if AI features are available
  */
 export const checkAIStatus = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/status`);
+    const response = await axios.get(`${AI_API_BASE_URL}/status`);
     return response.data;
   } catch (error) {
     console.error("Error checking AI status:", error);
@@ -24,12 +25,13 @@ export const checkAIStatus = async () => {
 /**
  * Explain an error
  */
-export const explainError = async (code, errorMessage, language) => {
+export const explainError = async (code, errorMessage, language, execution = {}) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/explain-error`, {
+    const response = await axios.post(`${AI_API_BASE_URL}/explain-error`, {
       code,
       errorMessage,
       language,
+      ...execution,
     });
     return response.data;
   } catch (error) {
@@ -43,7 +45,7 @@ export const explainError = async (code, errorMessage, language) => {
  */
 export const optimizeCode = async (code, language) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/optimize`, {
+    const response = await axios.post(`${AI_API_BASE_URL}/optimize`, {
       code,
       language,
     });
@@ -59,7 +61,7 @@ export const optimizeCode = async (code, language) => {
  */
 export const reviewCode = async (code, language) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/review`, {
+    const response = await axios.post(`${AI_API_BASE_URL}/review`, {
       code,
       language,
     });
@@ -75,7 +77,7 @@ export const reviewCode = async (code, language) => {
  */
 export const explainCode = async (code, language) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/explain`, {
+    const response = await axios.post(`${AI_API_BASE_URL}/explain`, {
       code,
       language,
     });

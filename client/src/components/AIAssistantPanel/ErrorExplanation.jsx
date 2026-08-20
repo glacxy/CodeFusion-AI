@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { explainError } from "../../api/aiApi";
 
-export default function ErrorExplanation({ code, errorMessage, language }) {
+export default function ErrorExplanation({ code, errorMessage, errorDetails, language }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,7 +16,12 @@ export default function ErrorExplanation({ code, errorMessage, language }) {
     setLoading(true);
     setError(null);
     try {
-      const response = await explainError(code, errorMessage, language);
+      const response = await explainError(code, errorMessage, language, {
+        stderr: errorDetails?.stderr || "",
+        compileOutput: errorDetails?.compileOutput || "",
+        exitCode: errorDetails?.exitCode,
+        status: errorDetails?.status || "",
+      });
       setResult(response.data);
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Failed to explain error");

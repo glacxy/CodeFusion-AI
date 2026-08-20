@@ -9,8 +9,7 @@ import Tabs from "../components/Tabs";
 import OutputConsole from "../components/OutputConsole/OutputConsole";
 import AIAssistantPanel from "../components/AIAssistantPanel/AIAssistantPanel";
 import { executeCode } from "../api/executeApi";
-
-const SOCKET_URL = "http://localhost:5000";
+import { SOCKET_URL } from "../config";
 
 const initialFiles = {
   "App.jsx": `import Room from "./Room";
@@ -66,6 +65,7 @@ function Room() {
   const [toastMessage, setToastMessage] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
   const [isAIOpen, setIsAIOpen] = useState(false);
+  const [aiFeature, setAIFeature] = useState("review");
   const [selectedCode, setSelectedCode] = useState("");
   const editorRef = useRef(null);
 
@@ -148,20 +148,25 @@ function Room() {
       setToastMessage(`${participant.username} left the room.`);
     });
 
-    socket.on("receiveCode", (data) => {
-      if (!data || data.roomId !== roomId || !data.files) return;
+    socket.on("receiveCode", (payload) => {
+      if (!payload || payload.roomId !== roomId) return;
 
+      const nextFiles = payload.files || {};
       const nextCurrentFile =
-        typeof data.currentFile === "string" && data.files[data.currentFile] !== undefined
-          ? data.currentFile
-          : Object.keys(data.files)[0];
+        typeof payload.currentFile === "string" && nextFiles[payload.currentFile] !== undefined
+          ? payload.currentFile
+          : Object.keys(nextFiles)[0];
 
-      lastRemoteEditorValueRef.current = {
+      if (!nextCurrentFile) return;
+
+      const nextCode = nextFiles[nextCurrentFile] || "";
+      const remoteValue = {
         fileName: nextCurrentFile,
-        code: data.files[nextCurrentFile] || "",
+        code: nextCode,
       };
 
-      setFiles(data.files);
+      lastRemoteEditorValueRef.current = remoteValue;
+      setFiles(nextFiles);
       setCurrentFile(nextCurrentFile);
     });
 
@@ -370,6 +375,7 @@ function Room() {
   };
 
   const openAIPanel = (feature = null) => {
+    setAIFeature(feature);
     setIsAIOpen(true);
   };
 
@@ -680,11 +686,16 @@ function Room() {
 
       {/* AI Assistant Panel */}
       <AIAssistantPanel
+        key={aiFeature}
         isOpen={isAIOpen}
         onClose={() => setIsAIOpen(false)}
+        feature={aiFeature}
         code={files[currentFile] || ""}
         language={language}
-        errorMessage={output && !output.success ? (output.error || output.stderr) : null}
+        errorMessage={output && (output.exitCode !== 0 || output.compileOutput || output.stderr || output.error)
+          ? (output.stderr || output.compileOutput || output.error)
+          : null}
+        errorDetails={output}
         selectedCode={selectedCode}
       />
     </div>

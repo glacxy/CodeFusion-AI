@@ -6,9 +6,10 @@
  */
 
 import axios from "axios";
+import { API_PREFIX } from "../config";
 
 const API = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: API_PREFIX,
   timeout: 20000, // 20s — generous client timeout, server has its own 15s Piston timeout
 });
 

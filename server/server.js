@@ -1,9 +1,7 @@
-
 require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-
 const http = require("http");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
@@ -12,22 +10,18 @@ const roomRoutes = require("./routes/roomRoutes");
 const executeRoutes = require("./routes/executeRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 
-
-
-
-
-
 const app = express();
 const server = http.createServer(app);
 const roomParticipants = new Map();
+const roomCodeState = new Map();
 
-console.log("[server] entrypoint", __filename);
-console.log("[server] cwd", process.cwd());
+const allowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173", process.env.CLIENT_URL].filter(Boolean);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -44,7 +38,6 @@ const serializeParticipants = (participantsMap) =>
 
 const broadcastRoomUsers = (roomId) => {
   const room = roomParticipants.get(roomId);
-
   if (!room) return;
 
   const participants = serializeParticipants(room);
@@ -53,7 +46,6 @@ const broadcastRoomUsers = (roomId) => {
 
 const handleJoinRoom = (socket, payload) => {
   const roomId = typeof payload === "string" ? payload : payload?.roomId || payload?.room;
-
   if (!roomId) return;
 
   const room = getOrCreateRoom(roomId);
@@ -72,9 +64,13 @@ const handleJoinRoom = (socket, payload) => {
   room.set(socket.id, participant);
 
   const participants = serializeParticipants(room);
+  const state = roomCodeState.get(roomId) || { files: {}, currentFile: null };
   socket.emit("room_users", participants);
   socket.emit("join_room", { roomId, participant, participants });
   socket.emit("roomJoined", { roomId, participants });
+  if (state.currentFile || Object.keys(state.files || {}).length) {
+    socket.emit("receiveCode", { roomId, ...state });
+  }
   socket.broadcast.to(roomId).emit("user_joined", participant);
   broadcastRoomUsers(roomId);
 };
@@ -86,13 +82,18 @@ io.on("connection", (socket) => {
   socket.on("join_room", (payload) => handleJoinRoom(socket, payload));
 
   socket.on("sendMessage", (data) => {
+    if (!data?.roomId) return;
     io.to(data.roomId).emit("receiveMessage", data);
-    console.log(`💬 Message in room ${data.roomId}: ${data.message}`);
   });
 
-  socket.on("codeChange", (data) => {
-    console.log("CODE RECEIVED:", data.code);
-    io.to(data.roomId).emit("receiveCode", data.code);
+  socket.on("codeChange", (payload) => {
+    if (!payload?.roomId) return;
+    const roomId = payload.roomId;
+    roomCodeState.set(roomId, {
+      files: payload.files || {},
+      currentFile: payload.currentFile || null,
+    });
+    socket.to(roomId).emit("receiveCode", payload);
   });
 
   socket.on("disconnect", () => {
@@ -108,6 +109,7 @@ io.on("connection", (socket) => {
       room.delete(socket.id);
       if (room.size === 0) {
         roomParticipants.delete(roomId);
+        roomCodeState.delete(roomId);
       } else {
         broadcastRoomUsers(roomId);
       }
@@ -119,8 +121,8 @@ io.on("connection", (socket) => {
   });
 });
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(express.json({ limit: "2mb" }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
@@ -128,24 +130,38 @@ app.use("/api/execute", executeRoutes);
 app.use("/api/ai", aiRoutes);
 
 app.get("/db-test", (req, res) => {
-  res.send("DB Test Route Working");
+  res.json({ ok: true, message: "DB test route working" });
 });
 
 app.get("/", (req, res) => {
   res.send("CodeFusion AI Backend Running");
 });
 
-const PORT = process.env.PORT || 5000;
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ success: false, error: "Internal server error" });
+});
+
+const PORT = Number(process.env.PORT || 5000);
 
 const startServer = async () => {
   try {
     await connectDB();
 
+    server.on("error", (error) => {
+      if (error.code === "EADDRINUSE") {
+        console.error(`❌ Port ${PORT} is already in use. Stop the existing server process and try again.`);
+      } else {
+        console.error("❌ Server startup error:", error.message);
+      }
+      process.exit(1);
+    });
+
     server.listen(PORT, () => {
       console.log(`🚀 Server Running on Port ${PORT}`);
     });
   } catch (error) {
-    console.error("❌ Failed to connect database:", error);
+    console.error("❌ Failed to start server:", error.message);
     process.exit(1);
   }
 };

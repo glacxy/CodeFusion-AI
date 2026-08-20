@@ -21,7 +21,7 @@ const getStatus = (req, res) => {
     available: aiService.isConfigured(),
     message: aiService.isConfigured()
       ? "AI features are available"
-      : "Claude API key not configured. Set CLAUDE_API_KEY environment variable.",
+      : "AI provider credentials are not configured. Set AI_API_KEY or GROQ_API_KEY.",
   });
 };
 
@@ -29,13 +29,14 @@ const getStatus = (req, res) => {
  * POST /api/ai/explain-error
  *
  * Request body:
- *   { code: string, errorMessage: string, language: string }
+ *   { code: string, errorMessage: string, language: string, stderr?: string,
+ *     compileOutput?: string, exitCode?: number, status?: string }
  *
  * Response:
  *   { success: true, data: { cause, location, explanation, fix, correctedCode } }
  */
 const explainError = async (req, res) => {
-  const { code, errorMessage, language } = req.body || {};
+  const { code, errorMessage, language, stderr, compileOutput, exitCode, status } = req.body || {};
 
   // Validation
   if (!code || typeof code !== "string") {
@@ -66,23 +67,30 @@ const explainError = async (req, res) => {
     return res.status(503).json({
       success: false,
       error: "AI service not configured",
-      detail: "Claude API key not set. Contact administrator.",
+      detail: "AI provider credentials are not configured. Set AI_API_KEY or GROQ_API_KEY.",
     });
   }
 
   try {
     console.log("[aiController] explain-error request for", language);
-    const result = await aiService.explainError(code, errorMessage, language);
+    const result = await aiService.explainError(code, errorMessage, language, {
+      stderr,
+      compileOutput,
+      exitCode,
+      status,
+    });
     return res.json({
       success: true,
       data: result,
     });
   } catch (error) {
     console.error("[aiController] explain-error failed:", error.message);
-    return res.status(500).json({
+    const status = error.response?.status || 500;
+    const errorMessage = error.message || "Failed to explain error";
+    return res.status(status).json({
       success: false,
       error: "Failed to explain error",
-      detail: error.message,
+      detail: errorMessage,
     });
   }
 };
@@ -120,7 +128,7 @@ const optimizeCode = async (req, res) => {
     return res.status(503).json({
       success: false,
       error: "AI service not configured",
-      detail: "Claude API key not set. Contact administrator.",
+      detail: "AI provider credentials are not configured. Set AI_API_KEY or GROQ_API_KEY.",
     });
   }
 
@@ -133,10 +141,12 @@ const optimizeCode = async (req, res) => {
     });
   } catch (error) {
     console.error("[aiController] optimize failed:", error.message);
-    return res.status(500).json({
+    const status = error.response?.status || 500;
+    const errorMessage = error.message || "Failed to optimize code";
+    return res.status(status).json({
       success: false,
       error: "Failed to optimize code",
-      detail: error.message,
+      detail: errorMessage,
     });
   }
 };
@@ -174,7 +184,7 @@ const reviewCode = async (req, res) => {
     return res.status(503).json({
       success: false,
       error: "AI service not configured",
-      detail: "Claude API key not set. Contact administrator.",
+      detail: "AI provider credentials are not configured. Set AI_API_KEY or GROQ_API_KEY.",
     });
   }
 
@@ -187,10 +197,12 @@ const reviewCode = async (req, res) => {
     });
   } catch (error) {
     console.error("[aiController] review failed:", error.message);
-    return res.status(500).json({
+    const status = error.response?.status || 500;
+    const errorMessage = error.message || "Failed to review code";
+    return res.status(status).json({
       success: false,
       error: "Failed to review code",
-      detail: error.message,
+      detail: errorMessage,
     });
   }
 };
@@ -228,7 +240,7 @@ const explainCode = async (req, res) => {
     return res.status(503).json({
       success: false,
       error: "AI service not configured",
-      detail: "Claude API key not set. Contact administrator.",
+      detail: "AI provider credentials are not configured. Set AI_API_KEY or GROQ_API_KEY.",
     });
   }
 
@@ -241,10 +253,12 @@ const explainCode = async (req, res) => {
     });
   } catch (error) {
     console.error("[aiController] explain failed:", error.message);
-    return res.status(500).json({
+    const status = error.response?.status || 500;
+    const errorMessage = error.message || "Failed to explain code";
+    return res.status(status).json({
       success: false,
       error: "Failed to explain code",
-      detail: error.message,
+      detail: errorMessage,
     });
   }
 };
