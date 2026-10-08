@@ -5,8 +5,9 @@
  */
 
 import axios from "axios";
+import { API_PREFIX } from "../config";
 
-const API_BASE_URL = "http://localhost:5000/api/ai";
+const API_BASE_URL = `${API_PREFIX}/ai`;
 
 /**
  * Check if AI features are available

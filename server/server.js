@@ -26,8 +26,13 @@ console.log("[server] cwd", process.cwd());
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "https://code-fusion-ai-beta.vercel.app",
+    ],
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -86,6 +91,8 @@ io.on("connection", (socket) => {
   socket.on("join_room", (payload) => handleJoinRoom(socket, payload));
 
   socket.on("sendMessage", (data) => {
+    if (!data?.roomId || !socket.rooms.has(data.roomId)) return;
+
     io.to(data.roomId).emit("receiveMessage", data);
     console.log(`💬 Message in room ${data.roomId}: ${data.message}`);
   });

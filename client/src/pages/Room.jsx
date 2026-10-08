@@ -9,8 +9,7 @@ import Tabs from "../components/Tabs";
 import OutputConsole from "../components/OutputConsole/OutputConsole";
 import AIAssistantPanel from "../components/AIAssistantPanel/AIAssistantPanel";
 import { executeCode } from "../api/executeApi";
-
-const SOCKET_URL = "http://localhost:5000";
+import { SOCKET_URL } from "../config";
 
 const initialFiles = {
   "App.jsx": `import Room from "./Room";
