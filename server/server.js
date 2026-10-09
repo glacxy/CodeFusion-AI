@@ -98,8 +98,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("codeChange", (data) => {
-    console.log("CODE RECEIVED:", data.code);
-    io.to(data.roomId).emit("receiveCode", data.code);
+    if (!data?.roomId || !socket.rooms.has(data.roomId) || !data.files) return;
+
+    socket.to(data.roomId).emit("receiveCode", data);
   });
 
   socket.on("disconnect", () => {

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
-import { io } from "socket.io-client";
 
 import ChatBox from "../components/ChatBox";
 import Explorer from "../components/Explorer";
@@ -9,7 +8,7 @@ import Tabs from "../components/Tabs";
 import OutputConsole from "../components/OutputConsole/OutputConsole";
 import AIAssistantPanel from "../components/AIAssistantPanel/AIAssistantPanel";
 import { executeCode } from "../api/executeApi";
-import { SOCKET_URL } from "../config";
+import socket from "../Socket";
 
 const initialFiles = {
   "App.jsx": `import Room from "./Room";
@@ -91,13 +90,6 @@ function Room() {
   }, [toastMessage]);
 
   useEffect(() => {
-    const socket = io(SOCKET_URL, {
-      transports: ["websocket", "polling"],
-      withCredentials: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
-
     socketRef.current = socket;
 
     const joinCurrentRoom = () => {
@@ -111,43 +103,45 @@ function Room() {
       });
     };
 
-    socket.on("connect", () => {
+    const handleConnect = () => {
+      console.info("[socket] connected", socket.id);
       setIsSocketConnected(true);
       joinCurrentRoom();
-    });
+    };
 
-    socket.on("disconnect", () => {
+    const handleDisconnect = (reason) => {
+      console.warn("[socket] disconnected:", reason);
       setIsSocketConnected(false);
-    });
+    };
 
-    socket.on("connect_error", (error) => {
+    const handleConnectError = (error) => {
       console.error("[socket] connect_error:", error.message);
-    });
+    };
 
-    socket.on("roomJoined", (data) => {
+    const handleRoomJoined = (data) => {
       console.log("[joinRoom] server acknowledged:", data);
-    });
+    };
 
-    socket.on("receiveMessage", (data) => {
+    const handleReceiveMessage = (data) => {
       if (!data || data.roomId !== roomId) return;
       setMessages((prev) => [...prev, data]);
-    });
+    };
 
-    socket.on("room_users", (participants) => {
+    const handleRoomUsers = (participants) => {
       setRoomUsers(Array.isArray(participants) ? participants : []);
-    });
+    };
 
-    socket.on("user_joined", (participant) => {
+    const handleUserJoined = (participant) => {
       if (!participant?.username) return;
       setToastMessage(`${participant.username} joined the room.`);
-    });
+    };
 
-    socket.on("user_left", (participant) => {
+    const handleUserLeft = (participant) => {
       if (!participant?.username) return;
       setToastMessage(`${participant.username} left the room.`);
-    });
+    };
 
-    socket.on("receiveCode", (data) => {
+    const handleReceiveCode = (data) => {
       if (!data || data.roomId !== roomId || !data.files) return;
 
       const nextCurrentFile =
@@ -162,18 +156,31 @@ function Room() {
 
       setFiles(data.files);
       setCurrentFile(nextCurrentFile);
-    });
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on("roomJoined", handleRoomJoined);
+    socket.on("receiveMessage", handleReceiveMessage);
+    socket.on("room_users", handleRoomUsers);
+    socket.on("user_joined", handleUserJoined);
+    socket.on("user_left", handleUserLeft);
+    socket.on("receiveCode", handleReceiveCode);
+
+    if (socket.connected) joinCurrentRoom();
+    else socket.connect();
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("connect_error");
-      socket.off("roomJoined");
-      socket.off("receiveMessage");
-      socket.off("room_users");
-      socket.off("user_joined");
-      socket.off("user_left");
-      socket.off("receiveCode");
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off("roomJoined", handleRoomJoined);
+      socket.off("receiveMessage", handleReceiveMessage);
+      socket.off("room_users", handleRoomUsers);
+      socket.off("user_joined", handleUserJoined);
+      socket.off("user_left", handleUserLeft);
+      socket.off("receiveCode", handleReceiveCode);
       socket.disconnect();
       socketRef.current = null;
     };
