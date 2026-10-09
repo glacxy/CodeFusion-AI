@@ -24,7 +24,7 @@ const createRoom = async (req, res) => {
 
 const getRooms = async (req, res) => {
   try {
-    const rooms = await Room.find().populate("host", "username email");
+    const rooms = await Room.find({ host: req.user._id }).populate("host", "username email");
 
     res.json(rooms);
   } catch (error) {
