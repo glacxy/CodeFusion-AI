@@ -5,35 +5,58 @@ import { getRooms } from "../api/roomApi";
 function Dashboard() {
 const navigate = useNavigate();
 
-const username = "Galaxy";
+const username = localStorage.getItem("username");
 
 const [roomId, setRoomId] = useState("");
 const [rooms, setRooms] = useState([]);
+const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+const [roomsError, setRoomsError] = useState("");
 
 useEffect(() => {
+let active = true;
 const fetchRooms = async () => {
-try {
 const token = localStorage.getItem("token");
-    const response = await getRooms(token);
+if (!token) {
+    navigate("/login");
+    return;
+}
 
-    setRooms(response.data);
-  } catch (error) {
-    console.log(error);
-  }
+try {
+      const response = await getRooms(token);
+
+      if (active) setRooms(response.data);
+    } catch (error) {
+      if (!active) return;
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("username");
+        localStorage.removeItem("userId");
+        navigate("/login");
+        return;
+      }
+      setRoomsError(error.response?.data?.message || "Unable to load rooms.");
+    } finally {
+      if (active) setIsLoadingRooms(false);
+    }
 };
 
 fetchRooms();
-}, []);
+return () => {
+    active = false;
+};
+}, [navigate]);
 
 return ( <div className="min-h-screen bg-gradient-to-br from-black via-purple-950 to-black text-white p-6">
   <div className="flex justify-between items-center mb-10">
     <h1 className="text-3xl font-bold">
-      Welcome {username} 🚀
+      Welcome{username ? `, ${username}` : ""} 🚀
     </h1>
 
     <button
       onClick={() => {
         localStorage.removeItem("token");
+        localStorage.removeItem("username");
+        localStorage.removeItem("userId");
         navigate("/login");
       }}
       className="bg-red-600 px-4 py-2 rounded-xl hover:bg-red-700"
@@ -126,7 +149,11 @@ return ( <div className="min-h-screen bg-gradient-to-br from-black via-purple-95
         Active Rooms
       </h2>
 
-      {rooms.length === 0 ? (
+      {isLoadingRooms ? (
+        <p className="text-gray-300 mt-4">Loading rooms...</p>
+      ) : roomsError ? (
+        <p className="text-red-300 mt-4">{roomsError}</p>
+      ) : rooms.length === 0 ? (
         <p className="text-gray-300 mt-4">
           No rooms available
         </p>

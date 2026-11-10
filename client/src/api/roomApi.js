@@ -13,6 +13,14 @@ Authorization: `Bearer ${token}`,
 });
 };
 
+export const getRoomById = (roomId, token) => {
+return API.get(`/rooms/${encodeURIComponent(roomId)}`, {
+headers: {
+Authorization: `Bearer ${token}`,
+},
+});
+};
+
 export const getRooms = (token) => {
 return API.get("/rooms", {
 headers: {

@@ -30,4 +30,32 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+const authenticateSocket = async (socket, next) => {
+  const token = socket.handshake.auth?.token;
+
+  if (!token) {
+    return next(new Error("Not authorized"));
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return next(new Error("Not authorized"));
+  }
+
+  try {
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return next(new Error("Not authorized"));
+    }
+
+    socket.data.user = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { protect, authenticateSocket };

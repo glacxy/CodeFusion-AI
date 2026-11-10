@@ -1,4 +1,5 @@
 const Room = require("../models/Room");
+const mongoose = require("mongoose");
 
 const createRoom = async (req, res) => {
   try {
@@ -32,7 +33,29 @@ const getRooms = async (req, res) => {
   }
 };
 
+const getRoom = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.roomId)) {
+      return res.status(404).json({ message: "Room not found" });
+    }
+
+    const room = await Room.findOne({
+      _id: req.params.roomId,
+      host: req.user._id,
+    }).populate("host", "username email");
+
+    if (!room) {
+      return res.status(404).json({ message: "Room not found" });
+    }
+
+    res.json(room);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createRoom,
   getRooms,
+  getRoom,
 };

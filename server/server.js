@@ -6,11 +6,14 @@ const cors = require("cors");
 
 const http = require("http");
 const { Server } = require("socket.io");
+const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const roomRoutes = require("./routes/roomRoutes");
 const executeRoutes = require("./routes/executeRoutes");
 const aiRoutes = require("./routes/aiRoutes");
+const Room = require("./models/Room");
+const { authenticateSocket } = require("./middleware/authMiddleware");
 
 
 
@@ -36,6 +39,8 @@ const io = new Server(server, {
   },
 });
 
+io.use(authenticateSocket);
+
 const getOrCreateRoom = (roomId) => {
   if (!roomParticipants.has(roomId)) {
     roomParticipants.set(roomId, new Map());
@@ -56,32 +61,50 @@ const broadcastRoomUsers = (roomId) => {
   io.to(roomId).emit("room_users", participants);
 };
 
-const handleJoinRoom = (socket, payload) => {
+const handleJoinRoom = async (socket, payload) => {
   const roomId = typeof payload === "string" ? payload : payload?.roomId || payload?.room;
 
-  if (!roomId) return;
+  if (!roomId || !mongoose.Types.ObjectId.isValid(roomId)) {
+    socket.emit("roomError", { message: "Room not found or access denied" });
+    return;
+  }
 
-  const room = getOrCreateRoom(roomId);
-  const user = typeof payload === "object" && payload?.user ? payload.user : {};
-  const participant = {
-    socketId: socket.id,
-    userId: user.id || user.userId || null,
-    username: user.username || user.name || `Guest-${socket.id.slice(0, 4)}`,
-    isHost: room.size === 0,
-    joinedAt: Date.now(),
-  };
+  try {
+    const authorizedRoom = await Room.findOne({
+      _id: roomId,
+      host: socket.data.user._id,
+    }).select("_id");
 
-  socket.join(roomId);
-  socket.data.joinedRooms = socket.data.joinedRooms || new Set();
-  socket.data.joinedRooms.add(roomId);
-  room.set(socket.id, participant);
+    if (!authorizedRoom) {
+      socket.emit("roomError", { message: "Room not found or access denied" });
+      return;
+    }
 
-  const participants = serializeParticipants(room);
-  socket.emit("room_users", participants);
-  socket.emit("join_room", { roomId, participant, participants });
-  socket.emit("roomJoined", { roomId, participants });
-  socket.broadcast.to(roomId).emit("user_joined", participant);
-  broadcastRoomUsers(roomId);
+    const room = getOrCreateRoom(roomId);
+    const user = socket.data.user;
+    const participant = {
+      socketId: socket.id,
+      userId: user._id.toString(),
+      username: user.username,
+      isHost: room.size === 0,
+      joinedAt: Date.now(),
+    };
+
+    socket.join(roomId);
+    socket.data.joinedRooms = socket.data.joinedRooms || new Set();
+    socket.data.joinedRooms.add(roomId);
+    room.set(socket.id, participant);
+
+    const participants = serializeParticipants(room);
+    socket.emit("room_users", participants);
+    socket.emit("join_room", { roomId, participant, participants });
+    socket.emit("roomJoined", { roomId, participants });
+    socket.broadcast.to(roomId).emit("user_joined", participant);
+    broadcastRoomUsers(roomId);
+  } catch (error) {
+    console.error("[socket] Failed to authorize room join:", error);
+    socket.emit("roomError", { message: "Unable to verify room access" });
+  }
 };
 
 io.on("connection", (socket) => {

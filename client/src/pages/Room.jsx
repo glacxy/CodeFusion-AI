@@ -8,6 +8,7 @@ import Tabs from "../components/Tabs";
 import OutputConsole from "../components/OutputConsole/OutputConsole";
 import AIAssistantPanel from "../components/AIAssistantPanel/AIAssistantPanel";
 import { executeCode } from "../api/executeApi";
+import { getRoomById } from "../api/roomApi";
 import socket from "../Socket";
 
 const initialFiles = {
@@ -61,6 +62,8 @@ function Room() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [roomUsers, setRoomUsers] = useState([]);
+  const [verifiedRoomId, setVerifiedRoomId] = useState(null);
+  const [roomAccessError, setRoomAccessError] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
   const [isAIOpen, setIsAIOpen] = useState(false);
@@ -68,7 +71,6 @@ function Room() {
   const editorRef = useRef(null);
 
   const currentUserName = localStorage.getItem("username") || "Guest";
-  const currentUserId = localStorage.getItem("userId") || "";
 
   useEffect(() => {
     if (!roomId) return;
@@ -79,7 +81,33 @@ function Room() {
       return;
     }
 
-    setInviteUrl(`${window.location.origin}/room/${roomId}`);
+    let active = true;
+
+    getRoomById(roomId, token)
+      .then(() => {
+        if (!active) return;
+        setVerifiedRoomId(roomId);
+        setInviteUrl(`${window.location.origin}/room/${roomId}`);
+      })
+      .catch((error) => {
+        if (!active) return;
+        if (error.response?.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("username");
+          localStorage.removeItem("userId");
+          navigate(`/login?redirect=${encodeURIComponent(`/room/${roomId}`)}`);
+          return;
+        }
+        setRoomAccessError({
+          roomId,
+          message:
+            error.response?.data?.message || "Unable to verify room access.",
+        });
+      });
+
+    return () => {
+      active = false;
+    };
   }, [navigate, roomId]);
 
   useEffect(() => {
@@ -90,17 +118,20 @@ function Room() {
   }, [toastMessage]);
 
   useEffect(() => {
+    if (verifiedRoomId !== roomId) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate(`/login?redirect=${encodeURIComponent(`/room/${roomId}`)}`);
+      return;
+    }
+
     socketRef.current = socket;
+    socket.auth = { token };
 
     const joinCurrentRoom = () => {
       if (!roomId) return;
-      socket.emit("joinRoom", {
-        roomId,
-        user: {
-          id: currentUserId,
-          username: currentUserName,
-        },
-      });
+      socket.emit("joinRoom", { roomId });
     };
 
     const handleConnect = () => {
@@ -116,6 +147,20 @@ function Room() {
 
     const handleConnectError = (error) => {
       console.error("[socket] connect_error:", error.message);
+      setVerifiedRoomId(null);
+      setRoomAccessError({
+        roomId,
+        message: "Unable to verify room access.",
+      });
+    };
+
+    const handleRoomError = (error) => {
+      setVerifiedRoomId(null);
+      setRoomAccessError({
+        roomId,
+        message: error?.message || "Room not found or access denied.",
+      });
+      setIsSocketConnected(false);
     };
 
     const handleRoomJoined = (data) => {
@@ -161,6 +206,7 @@ function Room() {
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("connect_error", handleConnectError);
+    socket.on("roomError", handleRoomError);
     socket.on("roomJoined", handleRoomJoined);
     socket.on("receiveMessage", handleReceiveMessage);
     socket.on("room_users", handleRoomUsers);
@@ -168,13 +214,14 @@ function Room() {
     socket.on("user_left", handleUserLeft);
     socket.on("receiveCode", handleReceiveCode);
 
-    if (socket.connected) joinCurrentRoom();
-    else socket.connect();
+    if (socket.connected) socket.disconnect();
+    socket.connect();
 
     return () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("connect_error", handleConnectError);
+      socket.off("roomError", handleRoomError);
       socket.off("roomJoined", handleRoomJoined);
       socket.off("receiveMessage", handleReceiveMessage);
       socket.off("room_users", handleRoomUsers);
@@ -184,7 +231,7 @@ function Room() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomId, currentUserId, currentUserName]);
+  }, [navigate, roomId, verifiedRoomId]);
 
   const emitCodeState = (nextFiles, nextCurrentFile) => {
     const socket = socketRef.current;
@@ -378,6 +425,29 @@ function Room() {
   const openAIPanel = (feature = null) => {
     setIsAIOpen(true);
   };
+
+  if (verifiedRoomId !== roomId) {
+    const accessError =
+      roomAccessError?.roomId === roomId ? roomAccessError.message : "";
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#1e1e1e] p-6 text-white">
+        <div className="text-center">
+          <p className="mb-4">
+            {accessError || "Verifying room access..."}
+          </p>
+          {accessError && (
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="rounded bg-purple-600 px-4 py-2 hover:bg-purple-700"
+            >
+              Return to dashboard
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen overflow-hidden bg-[#1e1e1e] text-white">
